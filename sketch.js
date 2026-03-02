@@ -50,7 +50,7 @@ function draw() {
     let bottommenuW = 800;
     let bottommenuH = 200;
     let bottommenuy = height - bottommenuH;
-    let historyY = bottommenuy - 20; // raised up by ~15px from previous position
+    let historyY = bottommenuy - 30; // 30px above menu
     fill(0);
     stroke(0);
     strokeWeight(1);
