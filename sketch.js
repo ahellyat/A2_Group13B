@@ -1,161 +1,116 @@
 let clickHistory = []; // stores index values of buttons clicked (1-5)
 let disabled = [false, false, false, false, false]; // flags for each button
 let submissions = []; // stores all completed arrays
-let showCorrect = false; // flag to display "Correct" message
-let showWrong = false; // flag to display "Wrong" message
+// track incorrect pattern checks to darken background
+let wrongCount = 0;
+let bgColor;
 let shapeArray = []; // array with 6 random shapes (square or triangle)
+
+// modal state for when an option has been pressed
+let showModal = false;
+let modalX, modalY, modalW, modalH;
+let closeX, closeY, closeW, closeH;
 
 function setup() {
   createCanvas(1200, 800);
+
+  // start with base background colour
+  bgColor = color(102, 178, 220);
 
   // initialize shape array with 6 random shapes
   for (let i = 0; i < 6; i++) {
     shapeArray.push(random() < 0.5 ? "square" : "triangle");
   }
   console.log("Shape array:", shapeArray);
+
+  // configure modal dimensions once
+  modalW = 600;
+  modalH = 400;
+  modalX = (width - modalW) / 2;
+  modalY = (height - modalH) / 2;
+  closeW = 80;
+  closeH = 40;
+  // position close button near top-right of modal with 10px padding
+  closeX = modalX + modalW - closeW - 10;
+  closeY = modalY + 10;
 }
 
 function draw() {
-  background(220);
-  fill(255);
-  bottommenu();
-  displayShapes();
-  submitButton();
-  displaySubmissionIndicators();
+  background(bgColor);
 
-  // show click history in the center of the canvas
-  fill(0);
-  stroke(0);
-  strokeWeight(1);
-  textAlign(CENTER, CENTER);
-  textSize(24);
-  let historyString = clickHistory.join(", ");
-  text(historyString, width / 2, height / 2);
+  // if complete, only draw the completion box; hide other UI elements
+  if (submissions.length < 8) {
+    fill(255);
+    bottommenu();
+    displayShapes();
+    submitButton();
+    displaySubmissionIndicators();
 
-  // show "Correct" or "Wrong" at the top based on pattern matching
-  if (showCorrect) {
+    // show click history just above the bottom menu
+    let bottommenuW = 800;
+    let bottommenuH = 200;
+    let bottommenuy = height - bottommenuH;
+    let historyY = bottommenuy - 20; // raised up by ~15px from previous position
     fill(0);
     stroke(0);
     strokeWeight(1);
     textAlign(CENTER, CENTER);
-    textSize(32);
-    text("Correct", width / 2, 50);
-  } else if (showWrong) {
-    fill(0);
-    stroke(0);
-    strokeWeight(1);
-    textAlign(CENTER, CENTER);
-    textSize(32);
-    text("Wrong", width / 2, 50);
+    textSize(24);
+    let historyString = clickHistory.join(", ");
+    text(historyString, width / 2, historyY);
   }
 
   // show completion screen when all shapes have been checked
   displayCompletion();
-}
 
-function displayShapes() {
-  // only show shapes if both submissions have been recorded
-  if (submissions.length < 2) {
-    return;
-  }
+  // draw modal overlay if active
+  if (showModal) {
+    // darken entire screen with semi-transparent black
+    noStroke();
+    fill(0, 150);
+    rect(0, 0, width, height);
 
-  let shapeSize = 60;
-  let rectWidth = 800;
-  let rectStartX = (width - rectWidth) / 2;
-  let shapeY = height - 240; // 20px above the rect
-  let spacing = rectWidth / 6;
-  let highlightedIndex = submissions.length - 2; // index of shape to highlight
-
-  stroke(0);
-  strokeWeight(2);
-
-  for (let i = 0; i < shapeArray.length; i++) {
-    let shapeX = rectStartX + (i + 0.5) * spacing;
-
-    // highlight with black if this is the current submission's shape, otherwise white
-    if (i === highlightedIndex) {
-      fill(0);
-    } else {
-      fill(255);
-    }
-
-    if (shapeArray[i] === "square") {
-      // draw square centered at shapeX, shapeY
-      rect(
-        shapeX - shapeSize / 2,
-        shapeY - shapeSize / 2,
-        shapeSize,
-        shapeSize,
-      );
-    } else if (shapeArray[i] === "triangle") {
-      // draw triangle centered at shapeX, shapeY
-      let h = shapeSize * 0.866; // height for equilateral triangle
-      triangle(
-        shapeX,
-        shapeY - h / 2,
-        shapeX - shapeSize / 2,
-        shapeY + h / 2,
-        shapeX + shapeSize / 2,
-        shapeY + h / 2,
-      );
-    }
-  }
-}
-
-function displaySubmissionIndicators() {
-  let indicatorSize = 50;
-  let indicatorX = 30;
-  let squareY = 80;
-  let triangleY = squareY + indicatorSize + 50;
-
-  fill(0);
-  stroke(0);
-  strokeWeight(2);
-
-  // draw square if first submission exists
-  if (submissions.length >= 1) {
-    rect(indicatorX, squareY, indicatorSize, indicatorSize);
-  }
-
-  // draw triangle if second submission exists
-  if (submissions.length >= 2) {
-    let h = indicatorSize * 0.866;
-    triangle(
-      indicatorX + indicatorSize / 2,
-      triangleY - h / 2,
-      indicatorX,
-      triangleY + h / 2,
-      indicatorX + indicatorSize,
-      triangleY + h / 2,
-    );
-  }
-}
-
-function displayCompletion() {
-  // show completion square when all 6 shapes have been checked
-  // 2 initial submissions + 6 pattern checks = 8 total submissions
-
-  if (submissions.length >= 8) {
-    let squareSize = 400;
-    let squareX = width / 2 - squareSize / 2;
-    let squareY = height / 2 - squareSize / 2;
-    background(255);
+    // white rectangle in center
     fill(255);
     stroke(0);
     strokeWeight(2);
-    rect(squareX, squareY, squareSize, squareSize);
+    rect(modalX, modalY, modalW, modalH);
 
-    // draw "complete" text in the center
-    fill(0);
+    // close button in top-right of modal, highlight on hover
+    let closeHovered =
+      mouseX >= closeX &&
+      mouseX <= closeX + closeW &&
+      mouseY >= closeY &&
+      mouseY <= closeY + closeH;
+    if (closeHovered) {
+      fill(180); // darker grey when hovering
+    } else {
+      fill(220);
+    }
     stroke(0);
-    strokeWeight(1);
+    rect(closeX, closeY, closeW, closeH);
+    fill(0);
+    noStroke();
     textAlign(CENTER, CENTER);
-    textSize(48);
-    text("Complete", width / 2, height / 2);
+    textSize(16);
+    text("Close", closeX + closeW / 2, closeY + closeH / 2);
   }
 }
 
 function mousePressed() {
+  // if the modal is showing, only allow the close button to be pressed
+  if (showModal) {
+    if (
+      mouseX >= closeX &&
+      mouseX <= closeX + closeW &&
+      mouseY >= closeY &&
+      mouseY <= closeY + closeH
+    ) {
+      showModal = false;
+    }
+    return;
+  }
+
   // reuse same dimensions as bottommenu to detect which square was clicked
   let bottommenuW = 800;
   let bottommenuH = 200;
@@ -178,6 +133,8 @@ function mousePressed() {
         clickHistory.push(i + 1);
         console.log(clickHistory);
       }
+      // show the modal when any option is clicked
+      showModal = true;
       return;
     }
   }
@@ -216,11 +173,15 @@ function mousePressed() {
           patternToMatch.length === clickHistory.length &&
           patternToMatch.every((val, idx) => val === clickHistory[idx]);
 
-        showCorrect = isMatch;
-        showWrong = !isMatch;
-      } else {
-        showCorrect = false;
-        showWrong = false;
+        if (!isMatch) {
+          wrongCount++;
+          // progressively darken the background toward dark gray more aggressively
+          let darkGray = color(50);
+          // increase the interpolation factor as wrongCount grows, but clamp at 0.9
+          let factor = min(0.3 + wrongCount * 0.2, 0.9);
+          bgColor = lerpColor(bgColor, darkGray, factor);
+        }
+        // if it is a match we leave bgColor unchanged
       }
     }
     // reset for new array
