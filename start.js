@@ -15,14 +15,36 @@ function drawTitle() {
   noStroke();
   textAlign(CENTER, CENTER);
   textSize(48);
-  text("Paws Parking Routine", width / 2, height / 2 - 200);
+  text("*Paws Parking Routine*", width / 2, height / 2 - 200);
 }
 
 function drawPattern() {
+  let carX = width / 2;
+  let carY = height / 3;
+
+  let carW = 200;
+  let carH = 80;
+
+  // -----------------
+  // Draw Car
+  // -----------------
+
+  stroke(13, 67, 102);
+  strokeWeight(1);
+
+  // Car body (blue)
+  fill(40, 120, 220);
+  rect(carX - carW / 2, carY - carH / 2, carW, carH, 20);
+
+  // Wheels
+  fill(30);
+  ellipse(carX - 70, carY + carH / 2, 40, 40);
+  ellipse(carX + 70, carY + carH / 2, 40, 40);
+
   let centerX = width / 2;
   let y = height / 2 - 120;
-  let size = 60;
-  let spacing = 100;
+  let size = 50;
+  let spacing = 30;
 
   stroke(13, 67, 102);
   strokeWeight(1);
@@ -32,7 +54,7 @@ function drawPattern() {
   rect(centerX - spacing - size / 2, y - size / 2, size, size);
 
   // Triangle
-  let h = size * 0.866;
+  let h = size * 0.87;
   triangle(
     centerX + spacing,
     y - h / 2,

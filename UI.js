@@ -1,63 +1,65 @@
 function drawHUD() {
-  noStroke();
-  textAlign(CENTER, CENTER);
-  textSize(16); // keep consistent size regardless of other draws
-  fill(13, 67, 102); // dark blue
-  if (submissions.length < 1 && !triedToOpenGateWithoutSubmission) {
-    text(
-      "It's my first day. I'm going to choose the order of how I want to do things.",
-      width / 2,
-      height / 8,
-    );
-  } else if (submissions.length === 1 && !triedToOpenGateWithoutSubmission) {
-    text(
-      "That felt like the right routine to handle guests with square licenses. How about the triangle ones? \n" +
-        "Let me decide a new order.",
-      width / 2,
-      height / 8,
-    );
-  } else if (
-    submissions.length > 1 &&
-    wrongCount === 0 &&
-    !triedToOpenGateWithoutSubmission
-  ) {
-    text(
-      "Looks like there's a couple more guests waiting to get in. Let me do the right routine for each of them.",
-      width / 2,
-      height / 5,
-    );
-  } else if (
-    submissions.length > 1 &&
-    wrongCount > 0 &&
-    !isMatch &&
-    !triedToOpenGateWithoutSubmission
-  ) {
-    text(
-      "Oh no. That felt wrong. I have to make sure I'm serving them properly. \n" +
-        "Let me try doing the right shape routine again",
-      width / 2,
-      height / 5,
-    );
-  } else if (
-    submissions.length > 1 &&
-    wrongCount > 0 &&
-    isMatch &&
-    !triedToOpenGateWithoutSubmission
-  ) {
-    text(
+  let message = "";
+  let yPos = height / 8;
+
+  // ------------------------
+  // Determine Message
+  // ------------------------
+
+  if (triedToOpenGateWithoutSubmission) {
+    message = "I can't let anyone in yet! I didn't do the steps I need to do.";
+  } else if (submissions.length < 1) {
+    message =
+      "It's my first day. I'm going to choose the order of how I want to do things.";
+  } else if (submissions.length === 1) {
+    message =
+      "That felt like the right routine to handle guests with square licenses. How about the triangle ones?\n" +
+      "Let me decide a new order.";
+  } else if (submissions.length > 1 && wrongCount === 0) {
+    message =
+      "Looks like there's a couple more guests waiting to get in. Let me do the right routine for each of them.";
+    yPos = height / 5;
+  } else if (submissions.length > 1 && wrongCount > 0 && !isMatch) {
+    message =
+      "Oh no. That felt wrong. I have to make sure I'm serving them properly.\n" +
+      "Let me try doing the right shape routine again";
+    yPos = height / 5;
+  } else if (submissions.length > 1 && wrongCount > 0 && isMatch) {
+    message =
       "Phew! I'm setting things right. Now my guests will be happy again!\n" +
-        "Let's keep going.",
-      width / 2,
-      height / 5,
-    );
-  } else if (triedToOpenGateWithoutSubmission) {
-    text(
-      "I can't let anyone in yet! I didn't do the steps I need to do.",
-      width / 2,
-      height / 8,
-    );
-    return; // stop here so other messages don’t override
+      "Let's keep going.";
+    yPos = height / 5;
   }
+
+  if (message === "") return;
+
+  // ------------------------
+  // Draw Speech Bubble SAFELY
+  // ------------------------
+
+  push(); // SAVE ALL CURRENT DRAW SETTINGS
+
+  textAlign(CENTER, CENTER);
+  textSize(16);
+
+  let padding = 10;
+  let maxWidth = width * 0.7;
+
+  // Calculate text box height properly for multiline text
+  let textBoxHeight = textLeading() * message.split("\n").length + 20;
+
+  rectMode(CENTER);
+  noStroke();
+  fill(247, 247, 205); //yellow
+
+  rect(width / 2, yPos, maxWidth, textBoxHeight + padding, 25);
+
+  // Draw Text
+  noStroke();
+  fill(13, 67, 102);
+  text(message, width / 2, yPos, maxWidth - 40);
+
+  pop(); // RESTORE previous rectMode, stroke, textAlign, etc.
 }
 
 function submitButton() {
@@ -228,6 +230,17 @@ function displayCurrentGuest() {
       carX + size / 2,
       carY + h / 2,
     );
+  }
+
+  //draw guest name
+  if (guestIndex === 0) {
+    textAlign(CENTER, CENTER);
+    textSize(16); // explicit size for consistency
+    fill(13, 67, 102); // dark blue text
+    noStroke();
+    text("Guest #1: Doug", carX, carY - carH - 30);
+  } else if (guestIndex === 1) {
+    text("Guest #2: Kitty", carX, carY - carH - 30);
   }
 }
 

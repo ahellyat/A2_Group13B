@@ -22,7 +22,7 @@ let closeX, closeY, closeW, closeH;
 let guestIndex = 0; // which guest is currently being served
 
 function setup() {
-  createCanvas(1200, 700);
+  createCanvas(1250, 680);
 
   // start with base background colour
   baseColor = color(212, 235, 250);
