@@ -1,4 +1,4 @@
-function drawHUD() {
+function drawMessage() {
   let message = "";
   let yPos = height / 8;
 
@@ -240,6 +240,10 @@ function displayCurrentGuest() {
     noStroke();
     text("Guest #1: Doug", carX, carY - carH - 30);
   } else if (guestIndex === 1) {
+    textAlign(CENTER, CENTER);
+    textSize(16); // explicit size for consistency
+    fill(13, 67, 102); // dark blue text
+    noStroke();
     text("Guest #2: Kitty", carX, carY - carH - 30);
   }
 }

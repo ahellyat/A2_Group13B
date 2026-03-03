@@ -62,7 +62,7 @@ function runGame() {
   if (submissions.length < 8) {
     fill(255);
     drawOptions();
-    drawHUD();
+    drawMessage();
     displayShapes();
     submitButton();
     displaySubmissionIndicators();
