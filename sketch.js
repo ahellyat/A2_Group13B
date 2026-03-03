@@ -12,10 +12,10 @@ let modalX, modalY, modalW, modalH;
 let closeX, closeY, closeW, closeH;
 
 function setup() {
-  createCanvas(1200, 800);
+  createCanvas(1200, 700);
 
   // start with base background colour
-  bgColor = color(102, 178, 220);
+  bgColor = color(212, 235, 250);
 
   // initialize shape array with 6 random shapes
   for (let i = 0; i < 6; i++) {
@@ -36,6 +36,14 @@ function setup() {
 }
 
 function draw() {
+  if (gameState === "start") {
+    drawStartScreen();
+  } else if (gameState === "play") {
+    runGame(); // your main gameplay function
+  }
+}
+
+function runGame() {
   background(bgColor);
 
   // if complete, only draw the completion box; hide other UI elements
@@ -51,9 +59,8 @@ function draw() {
     let bottommenuH = 200;
     let bottommenuy = height - bottommenuH;
     let historyY = bottommenuy - 30; // 30px above menu
-    fill(0);
-    stroke(0);
-    strokeWeight(1);
+    fill(13, 67, 102);
+    noStroke();
     textAlign(CENTER, CENTER);
     textSize(24);
     let historyString = clickHistory.join(", ");
@@ -65,39 +72,14 @@ function draw() {
 
   // draw modal overlay if active
   if (showModal) {
-    // darken entire screen with semi-transparent black
-    noStroke();
-    fill(0, 150);
-    rect(0, 0, width, height);
-
-    // white rectangle in center
-    fill(255);
-    stroke(0);
-    strokeWeight(2);
-    rect(modalX, modalY, modalW, modalH);
-
-    // close button in top-right of modal, highlight on hover
-    let closeHovered =
-      mouseX >= closeX &&
-      mouseX <= closeX + closeW &&
-      mouseY >= closeY &&
-      mouseY <= closeY + closeH;
-    if (closeHovered) {
-      fill(180); // darker grey when hovering
-    } else {
-      fill(220);
-    }
-    stroke(0);
-    rect(closeX, closeY, closeW, closeH);
-    fill(0);
-    noStroke();
-    textAlign(CENTER, CENTER);
-    textSize(16);
-    text("Close", closeX + closeW / 2, closeY + closeH / 2);
+    drawModal();
   }
 }
 
 function mousePressed() {
+  if (gameState === "start") {
+    handleStartClick();
+  }
   // if the modal is showing, only allow the close button to be pressed
   if (showModal) {
     if (

@@ -3,7 +3,8 @@ function bottommenu() {
   let bottommenuH = 200;
   let bottommenux = (width - bottommenuW) / 2;
   let bottommenuy = height - bottommenuH;
-
+  stroke(13, 67, 102);
+  strokeWeight(1);
   // draw the base menu rectangle
   rect(bottommenux, bottommenuy, bottommenuW, bottommenuH);
 
@@ -11,6 +12,8 @@ function bottommenu() {
   let sqSize = bottommenuW / 5;
   // squares positioned at the bottom of the menu
   for (let i = 0; i < 5; i++) {
+    stroke(13, 67, 102);
+    strokeWeight(1);
     let sqX = bottommenux + i * sqSize;
     let sqY = bottommenuy + bottommenuH - sqSize; // align squares bottom
 
@@ -28,18 +31,17 @@ function bottommenu() {
     } else if (pressed) {
       fill(100);
     } else if (hovered) {
-      fill(150);
+      fill(247, 247, 205);
     } else {
       fill(255);
     }
     rect(sqX, sqY, sqSize, sqSize);
 
     // draw centered text inside each square
+    noStroke();
     textAlign(CENTER, CENTER);
     textSize(16); // keep consistent size regardless of other draws
-    fill(0); // black text
-    stroke(0);
-    strokeWeight(1);
+    fill(13, 67, 102); // dark blue
     text(`Option ${i + 1}`, sqX + sqSize / 2, sqY + sqSize / 2);
     fill(255); // reset fill for next iteration
   }
@@ -61,20 +63,19 @@ function submitButton() {
   if (pressed) {
     fill(100);
   } else if (hovered) {
-    fill(150);
+    fill(247, 247, 205);
   } else {
     fill(255);
   }
-  stroke(0);
+  stroke(13, 67, 102);
   strokeWeight(1);
   rect(submitX, submitY, submitSize, submitSize + 200);
 
   // draw centered "Submit" text
   textAlign(CENTER, CENTER);
   textSize(16); // explicit size for consistency
-  fill(0); // black text
-  stroke(0);
-  strokeWeight(1);
+  fill(13, 67, 102); // dark blue text
+  noStroke();
   text("Submit", submitX + submitSize / 2, submitY + (submitSize + 200) / 2);
 }
 
@@ -167,16 +168,47 @@ function displayCompletion() {
     let squareY = height / 2 - squareSize / 2;
     // no full white background; just draw the completion box
     fill(255);
-    stroke(0);
-    strokeWeight(2);
+    stroke(13, 67, 102);
+    strokeWeight(1);
+
     rect(squareX, squareY, squareSize, squareSize);
 
     // draw "complete" text in the center
-    fill(0);
-    stroke(0);
-    strokeWeight(1);
+    fill(13, 67, 102);
+    noStroke();
     textAlign(CENTER, CENTER);
     textSize(48);
     text("Complete", width / 2, height / 2);
   }
+}
+function drawModal() {
+  // darken entire screen with semi-transparent black
+  noStroke();
+  fill(0, 150);
+  rect(0, 0, width, height);
+
+  // white rectangle in center
+  fill(255);
+  stroke(13, 67, 102);
+  strokeWeight(1);
+  rect(modalX, modalY, modalW, modalH);
+
+  // close button in top-right of modal, highlight on hover
+  let closeHovered =
+    mouseX >= closeX &&
+    mouseX <= closeX + closeW &&
+    mouseY >= closeY &&
+    mouseY <= closeY + closeH;
+  if (closeHovered) {
+    fill(180); // darker grey when hovering
+  } else {
+    fill(220);
+  }
+  stroke(13, 67, 102);
+  rect(closeX, closeY, closeW, closeH);
+  fill(13, 67, 102);
+  noStroke();
+  textAlign(CENTER, CENTER);
+  textSize(16);
+  text("Close", closeX + closeW / 2, closeY + closeH / 2);
 }
