@@ -18,17 +18,14 @@ function drawMessage() {
   } else if (submissions.length > 1 && wrongCount === 0) {
     message =
       "Looks like there's a couple more guests waiting to get in. Let me do the right routine for each of them.";
-    yPos = height / 5;
   } else if (submissions.length > 1 && wrongCount > 0 && !isMatch) {
     message =
       "Oh no. That felt wrong. I have to make sure I'm serving them properly.\n" +
       "Let me try doing the right shape routine again";
-    yPos = height / 5;
   } else if (submissions.length > 1 && wrongCount > 0 && isMatch) {
     message =
       "Phew! I'm setting things right. Now my guests will be happy again!\n" +
       "Let's keep going.";
-    yPos = height / 5;
   }
 
   if (message === "") return;
@@ -108,7 +105,7 @@ function displayShapes() {
   let rectWidth = 800;
   let rectStartX = (width - rectWidth) / 2;
   // move the row of shapes to the top of the canvas instead of the bottom
-  let shapeY = 50; // 50px from top
+  let shapeY = height / 2; // 50px from top
   let spacing = rectWidth / 6;
   let highlightedIndex = submissions.length - 2; // index of shape to highlight
 
@@ -149,40 +146,78 @@ function displayShapes() {
 }
 
 function displaySubmissionIndicators() {
-  let indicatorSize = 50;
-  let indicatorX = 30;
-  let squareY = 80;
-  let triangleY = squareY + indicatorSize + 50;
+  let indicatorSize = 20;
+  let startX = 45;
+  let startY = 90;
+  let spacing = 40;
 
-  fill(0);
+  push();
+
+  textAlign(CENTER, CENTER);
+  textSize(12);
+  noStroke();
+  fill(13, 67, 102);
+  text("Guest\nLog", width / 20 - 10, height / 11);
+
   stroke(0);
   strokeWeight(2);
 
-  // draw square if first submission exists
-  if (submissions.length >= 1) {
-    rect(indicatorX, squareY, indicatorSize, indicatorSize);
+  for (let i = 0; i < submissions.length; i++) {
+    let shapeType;
+
+    if (i === 0) {
+      shapeType = "square";
+    } else if (i === 1) {
+      shapeType = "triangle";
+    } else {
+      shapeType = shapeArray[i - 2];
+    }
+
+    let y = startY + i * spacing;
+
+    fill(0);
+
+    if (shapeType === "square") {
+      rect(startX, y, indicatorSize, indicatorSize);
+    } else if (shapeType === "triangle") {
+      let h = indicatorSize * 0.866;
+      triangle(
+        startX + indicatorSize / 2,
+        y - h / 2,
+        startX,
+        y + h / 2,
+        startX + indicatorSize,
+        y + h / 2,
+      );
+    }
+
+    // Draw pressed order hint for first 2
+    // in displaySubmissionIndicators()
+    if (i < 2 && submissions.length > i) {
+      let orderArray = submissions[i]; // first 2 submissions
+      for (let j = 0; j < orderArray.length; j++) {
+        fill(255, 0, 0);
+        noStroke();
+        textSize(12);
+        text(orderArray[j], startX + indicatorSize + 10 + j * 15, y);
+        // +1 because indices start at 0
+      }
+    }
   }
 
-  // draw triangle if second submission exists
-  if (submissions.length >= 2) {
-    let h = indicatorSize * 0.866;
-    triangle(
-      indicatorX + indicatorSize / 2,
-      triangleY - h / 2,
-      indicatorX,
-      triangleY + h / 2,
-      indicatorX + indicatorSize,
-      triangleY + h / 2,
-    );
-  }
+  pop();
 }
+
 function displayCurrentGuest() {
   let shape;
 
   if (guestIndex === 0 && submissions.length === 0) {
     shape = "square";
+    // Car body (blue)
+    fill(40, 120, 220);
   } else if (guestIndex === 1 && submissions.length === 1) {
     shape = "triangle";
+    fill(252, 3, 3); //red
   } else {
     return;
   }
@@ -200,8 +235,6 @@ function displayCurrentGuest() {
   stroke(0);
   strokeWeight(2);
 
-  // Car body (blue)
-  fill(40, 120, 220);
   rect(carX - carW / 2, carY - carH / 2, carW, carH, 20);
 
   // Wheels
@@ -240,7 +273,6 @@ function displayCurrentGuest() {
     noStroke();
     text("Guest #1: Doug", carX, carY - carH - 30);
   } else if (guestIndex === 1) {
-    textAlign(CENTER, CENTER);
     textSize(16); // explicit size for consistency
     fill(13, 67, 102); // dark blue text
     noStroke();

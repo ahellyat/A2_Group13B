@@ -20,7 +20,7 @@ function drawTitle() {
 
 function drawPattern() {
   let carX = width / 2;
-  let carY = height / 3;
+  let carY = height / 3 + 25;
 
   let carW = 200;
   let carH = 80;
@@ -42,7 +42,7 @@ function drawPattern() {
   ellipse(carX + 70, carY + carH / 2, 40, 40);
 
   let centerX = width / 2;
-  let y = height / 2 - 120;
+  let y = height / 3 + 20;
   let size = 50;
   let spacing = 30;
 
@@ -76,7 +76,7 @@ function drawInstructions() {
     "You'll develop a specific way of handling each of them.\n" +
     "Let's start your daily routine(s)!";
 
-  text(instructions, width / 2, height / 2);
+  text(instructions, width / 2, height / 2 + 30);
 }
 
 function drawBeginButton() {
