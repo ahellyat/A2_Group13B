@@ -70,7 +70,7 @@ function drawBeginButton() {
     mouseY <= btnY + btnH;
 
   if (hovered) {
-    fill(180);
+    fill(247, 247, 205);
   } else {
     fill(255);
   }

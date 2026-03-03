@@ -1,25 +1,37 @@
 let clickHistory = []; // stores index values of buttons clicked (1-5)
 let disabled = [false, false, false, false, false]; // flags for each button
 let submissions = []; // stores all completed arrays
+let triedToOpenGateWithoutSubmission = false;
 // track incorrect pattern checks to darken background
 let wrongCount = 0;
 let bgColor;
-let shapeArray = []; // array with 6 random shapes (square or triangle)
-
+let baseColor;
+let isMatch;
+let shapeArray = [
+  "square",
+  "square",
+  "square",
+  "triangle",
+  "triangle",
+  "triangle",
+];
 // modal state for when an option has been pressed
 let showModal = false;
 let modalX, modalY, modalW, modalH;
 let closeX, closeY, closeW, closeH;
+let guestIndex = 0; // which guest is currently being served
 
 function setup() {
   createCanvas(1200, 700);
 
   // start with base background colour
-  bgColor = color(212, 235, 250);
-
+  baseColor = color(212, 235, 250);
+  bgColor = baseColor;
   // initialize shape array with 6 random shapes
-  for (let i = 0; i < 6; i++) {
-    shapeArray.push(random() < 0.5 ? "square" : "triangle");
+  // Shuffle it
+  for (let i = shapeArray.length - 1; i > 0; i--) {
+    let j = floor(random(i + 1));
+    [shapeArray[i], shapeArray[j]] = [shapeArray[j], shapeArray[i]];
   }
   console.log("Shape array:", shapeArray);
 
@@ -49,10 +61,12 @@ function runGame() {
   // if complete, only draw the completion box; hide other UI elements
   if (submissions.length < 8) {
     fill(255);
-    bottommenu();
+    drawOptions();
+    drawHUD();
     displayShapes();
     submitButton();
     displaySubmissionIndicators();
+    displayCurrentGuest();
 
     // show click history just above the bottom menu
     let bottommenuW = 800;
@@ -66,61 +80,20 @@ function runGame() {
     let historyString = clickHistory.join(", ");
     text(historyString, width / 2, historyY);
   }
-
-  // show completion screen when all shapes have been checked
-  displayCompletion();
-
-  // draw modal overlay if active
   if (showModal) {
     drawModal();
   }
+  // show completion screen when all shapes have been checked
+  displayCompletion();
 }
 
 function mousePressed() {
   if (gameState === "start") {
     handleStartClick();
   }
-  // if the modal is showing, only allow the close button to be pressed
-  if (showModal) {
-    if (
-      mouseX >= closeX &&
-      mouseX <= closeX + closeW &&
-      mouseY >= closeY &&
-      mouseY <= closeY + closeH
-    ) {
-      showModal = false;
-    }
-    return;
-  }
 
-  // reuse same dimensions as bottommenu to detect which square was clicked
-  let bottommenuW = 800;
-  let bottommenuH = 200;
-  let bottommenux = (width - bottommenuW) / 2;
-  let bottommenuy = height - bottommenuH;
-  let sqSize = bottommenuW / 5;
-
-  for (let i = 0; i < 5; i++) {
-    let sx = bottommenux + i * sqSize;
-    let sy = bottommenuy + bottommenuH - sqSize;
-    if (
-      mouseX >= sx &&
-      mouseX <= sx + sqSize &&
-      mouseY >= sy &&
-      mouseY <= sy + sqSize
-    ) {
-      if (!disabled[i]) {
-        // mark button disabled and record click
-        disabled[i] = true;
-        clickHistory.push(i + 1);
-        console.log(clickHistory);
-      }
-      // show the modal when any option is clicked
-      showModal = true;
-      return;
-    }
-  }
-
+  modalMouseClicked();
+  bottomMenuMouseClicked();
   // check for submit button click
   let submitSize = 100;
   let submitHeight = submitSize + 200;
@@ -132,8 +105,15 @@ function mousePressed() {
     mouseY >= submitY &&
     mouseY <= submitY + submitHeight
   ) {
+    if (clickHistory.length === 0) {
+      triedToOpenGateWithoutSubmission = true;
+      return; // stop further logic
+    }
+    triedToOpenGateWithoutSubmission = false;
+
     // save current array and reset
     if (clickHistory.length > 0) {
+      guestIndex++;
       submissions.push([...clickHistory]);
       console.log("Saved submission:", clickHistory);
       console.log("All submissions:", submissions);
@@ -151,17 +131,18 @@ function mousePressed() {
         }
 
         // check if current submission matches the pattern
-        let isMatch =
+        isMatch =
           patternToMatch.length === clickHistory.length &&
           patternToMatch.every((val, idx) => val === clickHistory[idx]);
 
         if (!isMatch) {
           wrongCount++;
-          // progressively darken the background toward dark gray more aggressively
           let darkGray = color(50);
-          // increase the interpolation factor as wrongCount grows, but clamp at 0.9
           let factor = min(0.3 + wrongCount * 0.2, 0.9);
           bgColor = lerpColor(bgColor, darkGray, factor);
+        } else {
+          // lighten toward base color
+          bgColor = lerpColor(bgColor, baseColor, 0.3);
         }
         // if it is a match we leave bgColor unchanged
       }
