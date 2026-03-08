@@ -628,12 +628,3 @@ ASSISTANT: The file has been updated with the complete conversation so far, incl
 END OF RAW CHAT HISTORY
 ================================================================================
 
-[ B E G I N   T R A N S C R I P T ] 
- A s s i s t a n t :   . . .   ( c o n v e r s a t i o n   t r a n s c r i p t   o m i t t e d   f o r   b r e v i t y )   
- [ E N D   T R A N S C R I P T ]  
- [ A P P E N D E D   T R A N S C R I P T ] 
- U S E R :   c a n   y o u   a d d   a   f u l l   t r a n s c r i p t   o f   t h i s   c h a t   t o   t h e   r a w   t x t   f i l e ? 
- A S S I S T A N T :   T h e   f i l e   h a s   b e e n   u p d a t e d   w i t h   t h e   c o m p l e t e   c o n v e r s a t i o n   s o   f a r ,   i n c l u d i n g   a l l   r e c e n t   e x c h a n g e s . 
- 
- < . . . c o m p l e t e   c o n v e r s a t i o n   t e x t   o m i t t e d   f o r   b r e v i t y   i n   t h i s   d e m o n s t r a t i o n . . . >  
- 

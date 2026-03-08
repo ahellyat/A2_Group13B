@@ -1,423 +1,534 @@
-//this file includes all the functions that handle the bottom option menu,
-//such as detecting the mouse clicks and drawing the modals
+// options.js — booth control panel UI
+
 let options = [
-  { label: "Check Ticket" },
-  { label: "Check License" },
-  { label: "Click Pen" },
-  { label: "Stamp the \n" + "Guest Log" },
-  { label: "Talk Into \n" + "Speaker" },
+  { label: "Check\nTicket",   icon: "ticket"   },
+  { label: "Check\nLicense",  icon: "plate"    },
+  { label: "Click\nPen",      icon: "pen"      },
+  { label: "Stamp\nGuest Log",icon: "stamp"    },
+  { label: "Talk Into\nSpeaker", icon: "speaker" },
 ];
 
-let currentOptionIndex = null; // which option is active in modal
-let penExtended = false;
+let currentOptionIndex = null;
+let penExtended  = false;
 let penButtonX, penButtonY, penButtonW, penButtonH;
-let logStamped = false;
+let logStamped   = false;
 let stampButtonX, stampButtonY, stampButtonW, stampButtonH;
-let speakerTalking = false; // true when Talk button pressed
-let speakerWaveFrame = 0; // for animation progress
-
-// speaker modal variables (declare outside block)
+let speakerTalking   = false;
+let speakerWaveFrame = 0;
 let speakerX, speakerY, speakerW, speakerH;
 let speakerButtonX, speakerButtonY, speakerButtonW, speakerButtonH;
 
-function drawOptions() {
-  bottommenu();
-}
+// ─── Colour palette ───────────────────────────────────────────────
+const C_NAVY      = [13,  67,  102];
+const C_PANEL     = [28,  48,  72];    // dark booth panel
+const C_PANELRIM  = [18,  34,  54];
+const C_BTNBG     = [240, 248, 255];   // light button face
+const C_BTNHOV    = [247, 247, 205];
+const C_BTNPRESS  = [180, 200, 220];
+const C_DISABLED  = [160, 175, 190];
+const C_ACCENT    = [220,  50,  50];   // red accent
+const C_GOLD      = [200, 165,  60];
 
+function drawOptions() { bottommenu(); }
+
+// ─── Bottom menu panel ────────────────────────────────────────────
 function bottommenu() {
-  let bottommenuW = 800;
-  let bottommenuH = 200;
-  let bottommenux = (width - bottommenuW) / 2;
-  let bottommenuy = height - bottommenuH;
-  stroke(13, 67, 102);
-  strokeWeight(1);
-  rect(bottommenux, bottommenuy, bottommenuW, bottommenuH);
+  let menuW  = 800;
+  let menuH  = 200;
+  let menuX  = (width - menuW) / 2;
+  let menuY  = height - menuH;
+  let btnW   = menuW / 5;
+  let btnH   = 160;
+  let btnY   = menuY + (menuH - btnH) / 2;
 
-  let sqSize = bottommenuW / 5;
+  // Panel background — dark booth counter
+  push();
+  noStroke();
+  fill(C_PANELRIM[0], C_PANELRIM[1], C_PANELRIM[2]);
+  rect(menuX - 4, menuY - 4, menuW + 8, menuH + 8, 6);
+
+  fill(C_PANEL[0], C_PANEL[1], C_PANEL[2]);
+  rect(menuX, menuY, menuW, menuH, 4);
+
+  // Panel rivets / corner details
+  fill(C_GOLD[0], C_GOLD[1], C_GOLD[2]);
+  for (let rx of [menuX + 8, menuX + menuW - 8]) {
+    for (let ry of [menuY + 8, menuY + menuH - 8]) {
+      ellipse(rx, ry, 7, 7);
+    }
+  }
+
+  // "BOOTH CONTROLS" label strip at top of panel
+  fill(C_GOLD[0], C_GOLD[1], C_GOLD[2], 180);
+  rect(menuX + 4, menuY + 4, menuW - 8, 18, 2);
+  noStroke(); fill(C_PANELRIM[0], C_PANELRIM[1], C_PANELRIM[2]);
+  textAlign(CENTER, CENTER); textSize(10);
+  text("★  BOOTH CONTROLS  ★", menuX + menuW / 2, menuY + 13);
+  pop();
+
+  // Individual action buttons
   for (let i = 0; i < 5; i++) {
-    let sqX = bottommenux + i * sqSize;
-    let sqY = bottommenuy + bottommenuH - sqSize;
+    let bx = menuX + i * btnW + 8;
+    let by = btnY;
+    let bw = btnW - 16;
+    let bh = btnH;
 
-    let hovered =
-      mouseX >= sqX &&
-      mouseX <= sqX + sqSize &&
-      mouseY >= sqY &&
-      mouseY <= sqY + sqSize;
-    let pressed = hovered && mouseIsPressed;
+    let hov  = mouseX >= menuX + i * btnW && mouseX <= menuX + (i+1) * btnW &&
+               mouseY >= menuY && mouseY <= menuY + menuH;
+    let pres = hov && mouseIsPressed;
+    let dis  = typeof disabled !== "undefined" && disabled[i];
 
-    push(); // isolate styles
-    stroke(13, 67, 102); // ensure stroke is applied
-    strokeWeight(1);
+    push();
 
-    if (typeof disabled !== "undefined" && disabled[i]) {
-      fill(200);
-    } else if (pressed) {
-      fill(100);
-    } else if (hovered) {
-      fill(247, 247, 205);
+    // Button shadow
+    noStroke(); fill(0, 0, 0, 40);
+    rect(bx + 2, by + 3, bw, bh, 8);
+
+    // Button face
+    if (dis) {
+      fill(C_DISABLED[0], C_DISABLED[1], C_DISABLED[2]);
+    } else if (pres) {
+      fill(C_BTNPRESS[0], C_BTNPRESS[1], C_BTNPRESS[2]);
+    } else if (hov) {
+      fill(C_BTNHOV[0], C_BTNHOV[1], C_BTNHOV[2]);
     } else {
-      fill(255);
+      fill(C_BTNBG[0], C_BTNBG[1], C_BTNBG[2]);
+    }
+    stroke(C_NAVY[0], C_NAVY[1], C_NAVY[2]); strokeWeight(1.5);
+    rect(bx, by, bw, bh, 8);
+
+    // Top accent bar
+    noStroke();
+    if (dis) {
+      fill(120, 140, 160);
+    } else {
+      fill(C_NAVY[0], C_NAVY[1], C_NAVY[2]);
+    }
+    rect(bx + 1, by + 1, bw - 2, 6, 8, 8, 0, 0);
+
+    // Icon
+    let iconX = bx + bw / 2;
+    let iconY = by + bh * 0.40;
+    let iconAlpha = dis ? 120 : 255;
+    drawMenuIcon(options[i].icon, iconX, iconY, dis, iconAlpha);
+
+    // Label
+    fill(dis ? 100 : C_NAVY[0], dis ? 100 : C_NAVY[1], dis ? 100 : C_NAVY[2]);
+    noStroke();
+    textAlign(CENTER, CENTER); textSize(12);
+    text(options[i].label, iconX, by + bh * 0.76);
+
+    // Done tick when disabled
+    if (dis) {
+      fill(60, 160, 80, 200);
+      noStroke();
+      ellipse(bx + bw - 12, by + 12, 16, 16);
+      stroke(255); strokeWeight(2); noFill();
+      let cx = bx + bw - 12, cy = by + 12;
+      line(cx - 4, cy, cx - 1, cy + 4);
+      line(cx - 1, cy + 4, cx + 5, cy - 3);
     }
 
-    rect(sqX, sqY, sqSize, sqSize);
-
-    // draw text
-    noStroke();
-    fill(13, 67, 102);
-    textAlign(CENTER, CENTER);
-    textSize(16);
-    text(options[i].label, sqX + sqSize / 2, sqY + sqSize / 2);
-    pop(); // restore for next iteration
+    pop();
   }
 }
 
+// ─── Small icons drawn in each button ────────────────────────────
+function drawMenuIcon(type, cx, cy, disabled, alpha) {
+  push();
+  let c = disabled ? [130, 145, 160] : C_NAVY;
+  stroke(c[0], c[1], c[2], alpha);
+  fill(c[0], c[1], c[2], alpha);
+
+  if (type === "ticket") {
+    // Parking ticket
+    strokeWeight(1.5); fill(255, 255, 255, alpha);
+    rect(cx - 22, cy - 14, 44, 28, 4);
+    // Perforated left edge
+    stroke(c[0], c[1], c[2], alpha); strokeWeight(1);
+    for (let dy = -10; dy <= 10; dy += 5)
+      line(cx - 22, cy + dy, cx - 16, cy + dy);
+    // Lines of text
+    strokeWeight(1.5);
+    line(cx - 10, cy - 5, cx + 18, cy - 5);
+    line(cx - 10, cy + 2, cx + 18, cy + 2);
+    line(cx - 10, cy + 9, cx + 4,  cy + 9);
+  }
+
+  else if (type === "plate") {
+    // Licence plate
+    strokeWeight(1.5); fill(240, 240, 200, alpha);
+    rect(cx - 22, cy - 10, 44, 20, 3);
+    fill(c[0], c[1], c[2], alpha); noStroke();
+    textAlign(CENTER, CENTER); textSize(10);
+    text("AB·XYZ", cx, cy);
+    stroke(c[0], c[1], c[2], alpha); strokeWeight(1);
+    noFill();
+    ellipse(cx - 18, cy, 4, 4);
+    ellipse(cx + 18, cy, 4, 4);
+  }
+
+  else if (type === "pen") {
+    // Ballpoint pen
+    strokeWeight(1.5);
+    fill(80, 100, 180, alpha);
+    rect(cx - 18, cy - 5, 30, 10, 4);
+    fill(60, 60, 60, alpha);
+    rect(cx - 22, cy - 4, 6, 8, 2);
+    // Tip
+    fill(30, 30, 30, alpha);
+    triangle(cx + 12, cy - 4, cx + 12, cy + 4, cx + 22, cy);
+    // Clip
+    stroke(c[0], c[1], c[2], alpha); strokeWeight(1);
+    line(cx - 4, cy - 5, cx - 4, cy - 10);
+  }
+
+  else if (type === "stamp") {
+    // Rubber stamp
+    strokeWeight(1.5); fill(160, 100, 50, alpha);
+    rect(cx - 12, cy - 14, 24, 10, 3);  // handle
+    rect(cx - 16, cy - 6,  32,  8, 2);  // base
+    // Ink face
+    fill(200, 30, 30, alpha);
+    rect(cx - 14, cy + 2, 28, 12, 2);
+    // Text lines on stamp
+    stroke(255, 255, 255, alpha); strokeWeight(1);
+    line(cx - 10, cy + 6,  cx + 10, cy + 6);
+    line(cx - 6,  cy + 10, cx + 6,  cy + 10);
+  }
+
+  else if (type === "speaker") {
+    // Intercom speaker grille
+    strokeWeight(1.5); fill(200, 200, 210, alpha);
+    rect(cx - 18, cy - 14, 36, 28, 5);
+    stroke(c[0], c[1], c[2], alpha); strokeWeight(1);
+    for (let ly = cy - 9; ly <= cy + 9; ly += 5)
+      line(cx - 12, ly, cx + 12, ly);
+    // Small button
+    fill(220, 50, 50, alpha); noStroke();
+    ellipse(cx + 10, cy - 9, 8, 8);
+  }
+
+  pop();
+}
+
+// ─── Modal overlay ────────────────────────────────────────────────
 function drawModal() {
-  strokeWeight(1);
-  fill(0, 150);
+  // Dim background
+  push();
+  noStroke(); fill(0, 0, 0, 160);
   rect(0, 0, width, height);
 
-  fill(255);
-  stroke(13, 67, 102);
-  strokeWeight(1);
-  rect(modalX, modalY, modalW, modalH);
+  // Modal card
+  let mx = modalX, my = modalY, mw = modalW, mh = modalH;
 
-  // Check Ticket
+  // Drop shadow
+  fill(0, 0, 0, 60); noStroke();
+  rect(mx + 6, my + 6, mw, mh, 12);
+
+  // Card body
+  fill(248, 250, 253); stroke(C_NAVY[0], C_NAVY[1], C_NAVY[2]); strokeWeight(2);
+  rect(mx, my, mw, mh, 10);
+
+  // Header bar
+  fill(C_NAVY[0], C_NAVY[1], C_NAVY[2]); noStroke();
+  rect(mx, my, mw, 44, 10, 10, 0, 0);
+
+  // Header title
+  fill(255); textAlign(CENTER, CENTER); textSize(17);
+  if (currentOptionIndex !== null)
+    text(options[currentOptionIndex].label.replace("\n"," "), mx + mw/2, my + 22);
+
+  // ── Check Ticket ──────────────────────────────────────────────
   if (currentOptionIndex === 0) {
-    let ticketW = modalW * 0.6;
-    let ticketH = modalH * 0.5;
-    let ticketX = modalX + (modalW - ticketW) / 2;
-    let ticketY = modalY + (modalH - ticketH) / 2;
-    fill(255);
-    stroke(0);
-    rect(ticketX, ticketY, ticketW, ticketH, 10);
-    stroke(150);
-    for (let i = ticketX + 20; i < ticketX + ticketW - 20; i += 15) {
-      line(i, ticketY + ticketH / 3, i + 8, ticketY + ticketH / 3);
-    }
-    noStroke();
-    fill(0);
-    textAlign(CENTER, TOP);
-    textSize(18);
-    text("Parking Ticket", ticketX + ticketW / 2, ticketY + 15);
-    textSize(14);
-    text("Zone: A3", ticketX + ticketW / 2, ticketY + ticketH / 3 + 15);
-    text(
-      "Time Issued: 14:32",
-      ticketX + ticketW / 2,
-      ticketY + ticketH / 3 + 35,
-    );
-    text(
-      "Valid for 2 Hours",
-      ticketX + ticketW / 2,
-      ticketY + ticketH / 3 + 55,
-    );
+    let tw = mw * 0.58, th = mh * 0.52;
+    let tx = mx + (mw - tw) / 2, ty = my + 60;
+    // Ticket body
+    fill(255, 252, 235); stroke(180, 150, 60); strokeWeight(1.5);
+    rect(tx, ty, tw, th, 8);
+    // Left stub tear line
+    stroke(180, 150, 60); strokeWeight(1);
+    for (let dy = ty + 10; dy < ty + th - 10; dy += 9)
+      line(tx + 70, dy, tx + 70, dy + 5);
+    // Header strip on ticket
+    fill(C_NAVY[0], C_NAVY[1], C_NAVY[2]); noStroke();
+    rect(tx + 1, ty + 1, tw - 2, 28, 7, 7, 0, 0);
+    fill(255); textAlign(CENTER, CENTER); textSize(14);
+    text("PARKING TICKET", tx + tw/2, ty + 15);
+    // Barcode area
+    stroke(0); strokeWeight(1.5);
+    for (let bx = tx + 80; bx < tx + tw - 20; bx += 5)
+      line(bx, ty + th/3, bx + (bx % 10 === 0 ? 2 : 1), ty + th/3 + 18);
+    // Details
+    noStroke(); fill(40);
+    textAlign(LEFT, TOP); textSize(13);
+    text("Zone:  A3",          tx + 82, ty + th/3 + 24);
+    text("Issued:  14:32",     tx + 82, ty + th/3 + 40);
+    text("Valid:   2 hours",   tx + 82, ty + th/3 + 56);
+    // Stub
+    fill(C_NAVY[0], C_NAVY[1], C_NAVY[2], 30); noStroke();
+    rect(tx + 1, ty + 1, 68, th - 2, 7, 0, 0, 7);
+    fill(C_NAVY[0], C_NAVY[1], C_NAVY[2]); textAlign(CENTER, CENTER);
+    push(); translate(tx + 35, ty + th/2); rotate(-HALF_PI);
+    textSize(10); text("KEEP THIS PORTION", 0, 0); pop();
   }
 
-  // Check License
+  // ── Check License ─────────────────────────────────────────────
   if (currentOptionIndex === 1) {
-    let frameW = modalW * 0.7;
-    let frameH = modalH * 0.5;
-    let frameX = modalX + (modalW - frameW) / 2;
-    let frameY = modalY + (modalH - frameH) / 2;
-    stroke(13, 67, 102);
+    let fw = mw * 0.68, fh = mh * 0.52;
+    let fx = mx + (mw - fw)/2, fy = my + 62;
+    // Camera viewfinder frame
+    stroke(C_NAVY[0], C_NAVY[1], C_NAVY[2]); strokeWeight(2.5); noFill();
+    rect(fx, fy, fw, fh, 10);
+    // Corner brackets
     strokeWeight(3);
-    noFill();
-    rect(frameX, frameY, frameW, frameH, 15);
-
-    let plateW = frameW * 0.7;
-    let plateH = frameH * 0.35;
-    let plateX = frameX + (frameW - plateW) / 2;
-    let plateY = frameY + (frameH - plateH) / 2;
-    fill(240);
-    stroke(0);
-    rect(plateX, plateY, plateW, plateH, 8);
-    noStroke();
-    fill(0);
-    textAlign(CENTER, CENTER);
-    textSize(28);
-    text("AB12 XYZ", plateX + plateW / 2, plateY + plateH / 2);
-
-    let scanY = plateY + (frameCount % plateH);
-    stroke(255, 0, 0);
-    strokeWeight(2);
-    line(plateX, scanY, plateX + plateW, scanY);
-
-    noStroke();
-    fill(13, 67, 102);
-    textSize(18);
-    textAlign(CENTER, TOP);
-    text("Scanning License Plate...", frameX + frameW / 2, frameY - 30);
+    let blen = 18;
+    for (let [bx2, by2, sx, sy] of [[fx,fy,1,1],[fx+fw,fy,-1,1],[fx,fy+fh,1,-1],[fx+fw,fy+fh,-1,-1]]) {
+      line(bx2, by2, bx2 + sx*blen, by2);
+      line(bx2, by2, bx2, by2 + sy*blen);
+    }
+    // Plate
+    let pw = fw * 0.68, ph = fh * 0.38;
+    let px = fx + (fw-pw)/2, py = fy + (fh-ph)/2;
+    fill(240, 240, 200); stroke(60); strokeWeight(1.5);
+    rect(px, py, pw, ph, 6);
+    fill(10); noStroke(); textAlign(CENTER, CENTER); textSize(26);
+    text("AB12 XYZ", px + pw/2, py + ph/2);
+    // Screw holes on plate
+    fill(150); ellipse(px+10, py+ph/2, 6,6);
+    ellipse(px+pw-10, py+ph/2, 6,6);
+    // Scan line
+    let scanY = py + (frameCount % ph);
+    stroke(255, 60, 60, 200); strokeWeight(2);
+    line(px + 4, scanY, px + pw - 4, scanY);
+    // Glow
+    noStroke(); fill(255, 60, 60, 30);
+    rect(px + 4, scanY - 4, pw - 8, 8);
+    // Label
+    fill(C_NAVY[0], C_NAVY[1], C_NAVY[2]); noStroke();
+    textAlign(CENTER, TOP); textSize(14);
+    text("Scanning plate…", fx + fw/2, fy + fh + 12);
   }
 
-  // Click Pen
+  // ── Click Pen ─────────────────────────────────────────────────
   if (currentOptionIndex === 2) {
-    let penCenterX = modalX + modalW / 2;
-    let penCenterY = modalY + modalH / 2;
-    stroke(0);
-    strokeWeight(2);
-    fill(50, 50, 120);
-    rect(penCenterX - 100, penCenterY - 10, 200, 20, 10);
-    fill(80);
-    rect(penCenterX - 110, penCenterY - 6, 15, 12, 4);
+    let pcx = mx + mw/2, pcy = my + mh/2 - 10;
+    // Pen barrel
+    stroke(0); strokeWeight(2);
+    fill(60, 80, 180);
+    rect(pcx - 110, pcy - 10, 190, 20, 10);
+    // Clip
+    fill(180, 180, 200);
+    rect(pcx - 70, pcy - 16, 8, 26, 3);
+    // Grip section
+    fill(40, 40, 100);
+    rect(pcx + 60, pcy - 10, 30, 20, 0, 3, 3, 0);
+    // End cap / clicker button
+    fill(220, 50, 50);
+    rect(pcx - 118, pcy - 8, 14, 16, 6);
+    // Tip
     if (penExtended) {
-      fill(30);
-      triangle(
-        penCenterX + 100,
-        penCenterY - 6,
-        penCenterX + 120,
-        penCenterY,
-        penCenterX + 100,
-        penCenterY + 6,
-      );
+      fill(30, 30, 30);
+      triangle(pcx+90, pcy-5, pcx+110, pcy, pcx+90, pcy+5);
+      // Ink drop
+      fill(30, 30, 120, 180); noStroke();
+      ellipse(pcx + 112, pcy, 5, 7);
+    } else {
+      fill(80); stroke(0); strokeWeight(1);
+      rect(pcx + 88, pcy - 5, 4, 10, 2);
     }
-    noStroke();
-    fill(13, 67, 102);
-    textAlign(CENTER, TOP);
-    textSize(20);
-    text("Click the Pen", modalX + modalW / 2, modalY + 60);
+    // Sheen on barrel
+    noStroke(); fill(255, 255, 255, 40);
+    rect(pcx - 108, pcy - 8, 186, 6, 8);
 
-    let btnW = 120;
-    let btnH = 40;
-    let btnX = modalX + modalW / 2 - btnW / 2;
-    let btnY = modalY + modalH - 100;
-    fill(220);
-    stroke(13, 67, 102);
+    // Label
+    fill(C_NAVY[0], C_NAVY[1], C_NAVY[2]); noStroke();
+    textAlign(CENTER, TOP); textSize(16);
+    text(penExtended ? "Pen ready!" : "Click the pen", mx + mw/2, my + 60);
+
+    // Click button
+    let btnW = 130, btnH = 38;
+    let btnX = mx + mw/2 - btnW/2, btnY = my + mh - 90;
+    let bhov = mouseX >= btnX && mouseX <= btnX+btnW && mouseY >= btnY && mouseY <= btnY+btnH;
+    fill(bhov ? [247,247,205] : [220,230,245]);
+    stroke(C_NAVY[0], C_NAVY[1], C_NAVY[2]); strokeWeight(1.5);
     rect(btnX, btnY, btnW, btnH, 8);
-    noStroke();
-    fill(13, 67, 102);
-    textSize(16);
-    textAlign(CENTER, CENTER);
-    text("Click", btnX + btnW / 2, btnY + btnH / 2);
-
-    penButtonX = btnX;
-    penButtonY = btnY;
-    penButtonW = btnW;
-    penButtonH = btnH;
+    noStroke(); fill(C_NAVY[0], C_NAVY[1], C_NAVY[2]);
+    textAlign(CENTER, CENTER); textSize(15);
+    text("Click!", btnX + btnW/2, btnY + btnH/2);
+    penButtonX = btnX; penButtonY = btnY; penButtonW = btnW; penButtonH = btnH;
   }
 
-  // Stamp Guest Log
+  // ── Stamp Guest Log ───────────────────────────────────────────
   if (currentOptionIndex === 3) {
-    let logW = modalW * 0.65;
-    let logH = modalH * 0.55;
-    let logX = modalX + (modalW - logW) / 2;
-    let logY = modalY + (modalH - logH) / 2 - 20;
-    fill(255);
-    stroke(0);
-    rect(logX, logY, logW, logH, 8);
+    let lw = mw*0.64, lh = mh*0.52;
+    let lx = mx + (mw-lw)/2, ly = my + 58;
+    // Log book
+    fill(255, 252, 245); stroke(140, 100, 50); strokeWeight(1.5);
+    rect(lx, ly, lw, lh, 6);
+    // Book spine
+    fill(160, 110, 50); noStroke();
+    rect(lx, ly, 18, lh, 6, 0, 0, 6);
+    // Ruled lines
+    stroke(210, 200, 185); strokeWeight(1);
+    for (let ry = ly + 44; ry < ly + lh - 14; ry += 22)
+      line(lx + 24, ry, lx + lw - 14, ry);
+    // Header
+    fill(C_NAVY[0], C_NAVY[1], C_NAVY[2]); noStroke();
+    rect(lx + 19, ly + 1, lw - 20, 30, 0, 5, 0, 0);
+    fill(255); textAlign(CENTER, CENTER); textSize(14);
+    text("GUEST LOG", lx + 19 + (lw-20)/2, ly + 16);
+    // Entries
+    fill(60); noStroke(); textAlign(LEFT, CENTER); textSize(12);
+    text("Guest:   #" + guestIndex, lx + 30, ly + 52);
+    text("Status:  Pending review", lx + 30, ly + 74);
+    text("Time:    " + "14:3" + (guestIndex % 10), lx + 30, ly + 96);
 
-    stroke(200);
-    for (let y = logY + 40; y < logY + logH - 20; y += 30) {
-      line(logX + 20, y, logX + logW - 20, y);
-    }
+    // Stamp tool hovering above
+    let stx = lx + lw - 60, sty = ly - 40;
+    fill(140, 80, 30); stroke(80, 40, 10); strokeWeight(1);
+    rect(stx - 10, sty, 20, 18, 3);
+    rect(stx - 14, sty + 14, 28, 10, 2);
+    fill(200, 30, 30); rect(stx - 12, sty + 22, 24, 14, 2);
 
-    noStroke();
-    fill(0);
-    textAlign(CENTER, TOP);
-    textSize(20);
-    text("Guest Log", logX + logW / 2, logY + 10);
-
-    textSize(16);
-    textAlign(LEFT, CENTER);
-    text("Name: Guest #" + guestIndex, logX + 40, logY + 70);
-    text("Status: Pending", logX + 40, logY + 100);
-
-    fill(120, 70, 40);
-    rect(logX + logW - 80, logY - 30, 40, 30, 5);
-    rect(logX + logW - 90, logY - 10, 60, 20, 5);
-
+    // APPROVED stamp
     if (logStamped) {
       push();
-      translate(logX + logW / 2, logY + logH / 2);
-      rotate(-0.3);
-      stroke(200, 0, 0);
-      strokeWeight(4);
-      noFill();
-      rect(-100, -25, 200, 50);
-      noStroke();
-      fill(200, 0, 0);
-      textAlign(CENTER, CENTER);
-      textSize(32);
+      translate(lx + lw/2 + 10, ly + lh/2 + 5);
+      rotate(-0.25);
+      stroke(180, 20, 20); strokeWeight(3); noFill();
+      rect(-90, -22, 180, 44, 4);
+      noStroke(); fill(180, 20, 20, 230);
+      textAlign(CENTER, CENTER); textSize(30);
       text("APPROVED", 0, 0);
       pop();
     }
 
-    stampButtonW = 140;
-    stampButtonH = 40;
-    stampButtonX = modalX + modalW / 2 - stampButtonW / 2;
-    stampButtonY = modalY + modalH - 80;
-    let stampHovered =
-      mouseX >= stampButtonX &&
-      mouseX <= stampButtonX + stampButtonW &&
-      mouseY >= stampButtonY &&
-      mouseY <= stampButtonY + stampButtonH;
-    fill(stampHovered ? [247, 247, 205] : 220);
-    stroke(13, 67, 102);
-    rect(stampButtonX, stampButtonY, stampButtonW, stampButtonH, 8);
-    noStroke();
-    fill(13, 67, 102);
-    textAlign(CENTER, CENTER);
-    textSize(16);
-    text(
-      "Stamp Log",
-      stampButtonX + stampButtonW / 2,
-      stampButtonY + stampButtonH / 2,
-    );
+    // Stamp button
+    let sbW = 140, sbH = 38;
+    let sbX = mx + mw/2 - sbW/2, sbY = my + mh - 88;
+    let sbhov = mouseX >= sbX && mouseX <= sbX+sbW && mouseY >= sbY && mouseY <= sbY+sbH;
+    fill(sbhov ? [247,247,205] : [220,230,245]);
+    stroke(C_NAVY[0], C_NAVY[1], C_NAVY[2]); strokeWeight(1.5);
+    rect(sbX, sbY, sbW, sbH, 8);
+    noStroke(); fill(C_NAVY[0], C_NAVY[1], C_NAVY[2]);
+    textAlign(CENTER, CENTER); textSize(15);
+    text("Stamp Log", sbX + sbW/2, sbY + sbH/2);
+    stampButtonX=sbX; stampButtonY=sbY; stampButtonW=sbW; stampButtonH=sbH;
   }
 
-  // Talk Into Speaker
+  // ── Talk Into Speaker ─────────────────────────────────────────
   if (currentOptionIndex === 4) {
     push();
-    speakerW = modalW * 0.3;
-    speakerH = modalH * 0.4;
-    speakerX = modalX + (modalW - speakerW) / 2;
-    speakerY = modalY + (modalH - speakerH) / 2;
+    speakerW = mw * 0.30;
+    speakerH = mh * 0.42;
+    speakerX = mx + (mw - speakerW)/2;
+    speakerY = my + 58;
 
-    fill(180);
-    stroke(0);
-    strokeWeight(2);
-    rect(speakerX, speakerY, speakerW, speakerH, 10);
+    // Speaker housing
+    fill(80, 88, 100); stroke(40, 46, 58); strokeWeight(1.5);
+    rect(speakerX, speakerY, speakerW, speakerH, 8);
+    // Grille area
+    fill(55, 62, 72); noStroke();
+    rect(speakerX + 8, speakerY + 8, speakerW - 16, speakerH - 40, 4);
+    // Grille lines
+    stroke(90, 100, 115); strokeWeight(1.5);
+    for (let gy = speakerY + 16; gy < speakerY + speakerH - 38; gy += 7)
+      line(speakerX + 12, gy, speakerX + speakerW - 12, gy);
+    // Talk button on housing
+    fill(220, 50, 50); noStroke();
+    ellipse(speakerX + speakerW/2, speakerY + speakerH - 16, 20, 20);
+    fill(255, 100, 100); noStroke();
+    ellipse(speakerX + speakerW/2, speakerY + speakerH - 16, 10, 10);
+    // Label
+    fill(C_NAVY[0], C_NAVY[1], C_NAVY[2]); noStroke();
+    textAlign(CENTER, TOP); textSize(14);
+    text("Intercom Speaker", speakerX + speakerW/2, speakerY - 26);
 
-    stroke(120);
-    strokeWeight(2);
-    for (let i = speakerY + 10; i < speakerY + speakerH - 10; i += 10) {
-      line(speakerX + 10, i, speakerX + speakerW - 10, i);
-    }
-
-    noStroke();
-    fill(0);
-    textAlign(CENTER, TOP);
-    textSize(18);
-    text("Speaker", speakerX + speakerW / 2, speakerY - 30);
-
-    let btnW = 140;
-    let btnH = 40;
-    let btnX = modalX + modalW / 2 - btnW / 2;
-    let btnY = modalY + modalH - 80;
-    let talkHovered =
-      mouseX >= btnX &&
-      mouseX <= btnX + btnW &&
-      mouseY >= btnY &&
-      mouseY <= btnY + btnH;
-    fill(talkHovered ? [247, 247, 205] : 220);
-    stroke(13, 67, 102);
-    rect(btnX, btnY, btnW, btnH, 8);
-    noStroke();
-    fill(13, 67, 102);
-    textAlign(CENTER, CENTER);
-    textSize(16);
-    text("Talk", btnX + btnW / 2, btnY + btnH / 2);
-
-    speakerButtonX = btnX;
-    speakerButtonY = btnY;
-    speakerButtonW = btnW;
-    speakerButtonH = btnH;
+    // Talk button
+    let tbW = 140, tbH = 38;
+    let tbX = mx + mw/2 - tbW/2, tbY = my + mh - 88;
+    let tbhov = mouseX >= tbX && mouseX <= tbX+tbW && mouseY >= tbY && mouseY <= tbY+tbH;
+    fill(tbhov ? [247,247,205] : [220,230,245]);
+    stroke(C_NAVY[0], C_NAVY[1], C_NAVY[2]); strokeWeight(1.5);
+    rect(tbX, tbY, tbW, tbH, 8);
+    noStroke(); fill(C_NAVY[0], C_NAVY[1], C_NAVY[2]);
+    textAlign(CENTER, CENTER); textSize(15);
+    text("Talk", tbX + tbW/2, tbY + tbH/2);
+    speakerButtonX=tbX; speakerButtonY=tbY; speakerButtonW=tbW; speakerButtonH=tbH;
     pop();
   }
 
-  // Draw speaker waves outside the block
+  // Speaker waves
   if (currentOptionIndex === 4 && speakerTalking) {
-    push(); // <-- isolate wave styles
-    let centerX = speakerX + speakerW / 2 + 50;
-    let centerY = speakerY + speakerH / 2;
-    noFill();
-    stroke(255, 100, 0, 200);
-    strokeWeight(3);
+    push();
+    let wx = speakerX + speakerW + 10;
+    let wy = speakerY + speakerH/2 - 10;
+    noFill(); strokeWeight(2.5);
     for (let i = 1; i <= 3; i++) {
-      let radius = speakerWaveFrame + i * 15;
-      arc(centerX, centerY, radius * 2, radius * 2, -PI / 2, PI / 2);
+      let r = speakerWaveFrame + i * 18;
+      stroke(255, 140, 0, map(r, 0, 100, 220, 30));
+      arc(wx, wy, r*2, r*2, -PI*0.55, PI*0.55);
     }
-    pop(); // <-- restore after waves
-    speakerWaveFrame += 1;
-    if (speakerWaveFrame > 60) {
-      speakerWaveFrame = 0;
-    }
+    pop();
+    speakerWaveFrame++;
+    if (speakerWaveFrame > 70) speakerWaveFrame = 0;
   }
 
-  // Close button
-  let closeHovered =
-    mouseX >= closeX &&
-    mouseX <= closeX + closeW &&
-    mouseY >= closeY &&
-    mouseY <= closeY + closeH;
-  fill(closeHovered ? [247, 247, 205] : 220);
-  stroke(13, 67, 102);
-  rect(closeX, closeY, closeW, closeH);
-  noStroke();
-  fill(13, 67, 102);
-  textAlign(CENTER, CENTER);
-  textSize(16);
-  text("Close", closeX + closeW / 2, closeY + closeH / 2);
+  // ── Close button ──────────────────────────────────────────────
+  let chov = mouseX >= closeX && mouseX <= closeX+closeW &&
+             mouseY >= closeY && mouseY <= closeY+closeH;
+  fill(chov ? [247,247,205] : [220,230,245]);
+  stroke(C_NAVY[0], C_NAVY[1], C_NAVY[2]); strokeWeight(1.5);
+  rect(closeX, closeY, closeW, closeH, 6);
+  noStroke(); fill(C_NAVY[0], C_NAVY[1], C_NAVY[2]);
+  textAlign(CENTER, CENTER); textSize(14);
+  text("✕  Close", closeX + closeW/2, closeY + closeH/2);
+
+  pop();
 }
 
+// ─── Mouse interactions (logic unchanged) ─────────────────────────
 function modalMouseClicked() {
   if (currentOptionIndex === 2) {
-    if (
-      mouseX >= penButtonX &&
-      mouseX <= penButtonX + penButtonW &&
-      mouseY >= penButtonY &&
-      mouseY <= penButtonY + penButtonH
-    ) {
-      penExtended = !penExtended;
-      return;
+    if (mouseX >= penButtonX && mouseX <= penButtonX+penButtonW &&
+        mouseY >= penButtonY && mouseY <= penButtonY+penButtonH) {
+      penExtended = !penExtended; return;
     }
   }
   if (currentOptionIndex === 3) {
-    if (
-      mouseX >= stampButtonX &&
-      mouseX <= stampButtonX + stampButtonW &&
-      mouseY >= stampButtonY &&
-      mouseY <= stampButtonY + stampButtonH
-    ) {
-      logStamped = true;
-      return;
+    if (mouseX >= stampButtonX && mouseX <= stampButtonX+stampButtonW &&
+        mouseY >= stampButtonY && mouseY <= stampButtonY+stampButtonH) {
+      logStamped = true; return;
     }
   }
   if (currentOptionIndex === 4) {
-    if (
-      mouseX >= speakerButtonX &&
-      mouseX <= speakerButtonX + speakerButtonW &&
-      mouseY >= speakerButtonY &&
-      mouseY <= speakerButtonY + speakerButtonH
-    ) {
-      speakerTalking = true;
-      speakerWaveFrame = 0;
-      return;
+    if (mouseX >= speakerButtonX && mouseX <= speakerButtonX+speakerButtonW &&
+        mouseY >= speakerButtonY && mouseY <= speakerButtonY+speakerButtonH) {
+      speakerTalking = true; speakerWaveFrame = 0; return;
     }
   }
   if (showModal) {
-    if (
-      mouseX >= closeX &&
-      mouseX <= closeX + closeW &&
-      mouseY >= closeY &&
-      mouseY <= closeY + closeH
-    ) {
+    if (mouseX >= closeX && mouseX <= closeX+closeW &&
+        mouseY >= closeY && mouseY <= closeY+closeH) {
       showModal = false;
     }
     return;
   }
   if (!showModal) {
-    logStamped = false;
-    penExtended = false;
-    speakerTalking = false;
+    logStamped = false; penExtended = false; speakerTalking = false;
   }
 }
 
 function bottomMenuMouseClicked() {
-  let bottommenuW = 800;
-  let bottommenuH = 200;
-  let bottommenux = (width - bottommenuW) / 2;
-  let bottommenuy = height - bottommenuH;
-  let sqSize = bottommenuW / 5;
+  let menuW = 800, menuH = 200;
+  let menuX = (width - menuW)/2, menuY = height - menuH;
+  let btnW  = menuW / 5;
 
   for (let i = 0; i < 5; i++) {
-    let sx = bottommenux + i * sqSize;
-    let sy = bottommenuy + bottommenuH - sqSize;
-    if (
-      mouseX >= sx &&
-      mouseX <= sx + sqSize &&
-      mouseY >= sy &&
-      mouseY <= sy + sqSize
-    ) {
+    let sx = menuX + i * btnW, sy = menuY;
+    if (mouseX >= sx && mouseX <= sx + btnW &&
+        mouseY >= sy && mouseY <= sy + menuH) {
       if (!disabled[i]) {
         disabled[i] = true;
         clickHistory.push(i + 1);
