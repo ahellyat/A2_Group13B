@@ -265,6 +265,7 @@ function runGame() {
     drawTicketBooth(gateAngle);
     displayCurrentGuest(carAnimX, frozenShape, frozenCarColor, frozenAnimalName, frozenGuestLabel);
   }
+  drawFog();
   if (showModal) drawModal();
   displayCompletion();
 }

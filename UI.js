@@ -50,22 +50,43 @@ function drawMessage() {
 }
 
 function submitButton() {
-  let submitSize = 100, submitHeight = submitSize + 200;
-  let submitX = width - submitSize - 10;
-  let submitY = height / 2 - submitHeight / 2;
-  let hovered = mouseX >= submitX && mouseX <= submitX + submitSize &&
-                mouseY >= submitY && mouseY <= submitY + submitHeight;
+  let bW = 100, bH = 300;
+  let bX = width - bW - 10;
+  let bY = height / 2 - bH / 2;
+
+  let hovered = mouseX >= bX && mouseX <= bX + bW &&
+                mouseY >= bY && mouseY <= bY + bH;
   let pressed = hovered && mouseIsPressed;
 
-  if (pressed)      fill(100);
-  else if (hovered) fill(247, 247, 205);
-  else              fill(255);
+  push();
 
-  stroke(13, 67, 102); strokeWeight(1);
-  rect(submitX, submitY, submitSize, submitSize + 200);
-  textAlign(CENTER, CENTER); textSize(16);
+  // Drop shadow
+  noStroke(); fill(0, 0, 0, 35);
+  rect(bX + 4, bY + 5, bW, bH, 10);
+
+  // Button face — matches booth panel style
+  if      (pressed) fill(180, 200, 220);
+  else if (hovered) fill(247, 247, 205);
+  else              fill(240, 248, 255);
+  stroke(13, 67, 102); strokeWeight(1.8);
+  rect(bX, bY, bW, bH, 10);
+
+  // Top accent bar (gold on hover, navy otherwise)
+  noStroke();
+  fill(hovered ? color(200, 165, 60) : color(13, 67, 102));
+  rect(bX + 1, bY + 1, bW - 2, 7, 10, 10, 0, 0);
+
+  // Bottom accent bar
+  fill(hovered ? color(200, 165, 60) : color(13, 67, 102));
+  rect(bX + 1, bY + bH - 8, bW - 2, 7, 0, 0, 10, 10);
+
+  // Centred label — wraps to fit inside button width
   fill(13, 67, 102); noStroke();
-  text("Open \nParking \nLot Gate\n", submitX + submitSize / 2, submitY + (submitSize + 200) / 2);
+  textAlign(CENTER, CENTER);
+  textFont("sans-serif"); textStyle(BOLD); textSize(13);
+  text("Open\nParking\nLot Gate", bX + bW / 2, bY + bH / 2);
+
+  pop();
 }
 
 function displayShapes()               { /* shapes on cars only */ }
@@ -662,6 +683,94 @@ function drawPastCustomers() {
 function displayCurrentGuest(carAnimX, shape, carColor, animalName, guestLabel) {
   if (submissions.length >= 8) return;
   drawCar(carAnimX, carColor, shape, animalName, guestLabel);
+}
+
+// ─────────────────────────────────────────────
+// Fog overlay — lower half, staged by wrongCount
+// Stage 0: no fog
+// Stage 1: light haze (wrongCount === 1)
+// Stage 2: moderate fog (wrongCount === 2)
+// Stage 3+: thick fog (wrongCount >= 3)
+// ─────────────────────────────────────────────
+function drawFog() {
+  if (typeof wrongCount === "undefined" || wrongCount === 0) return;
+
+  // Fog starts at the top of the bottom menu and extends to the bottom of canvas
+  let menuH  = 200;
+  let fogTop = height - menuH;   // top of the booth control panel
+  let fogH   = menuH;            // covers the full menu strip down to canvas bottom
+
+  // How many fog layers and their opacity depend on wrongCount stage
+  // Stage 1: gentle haze — one semi-transparent pass
+  // Stage 2: two passes, denser
+  // Stage 3+: three passes, near-opaque
+
+  let passes, baseAlpha;
+  if      (wrongCount === 1) { passes = 2; baseAlpha = 110; }
+  else if (wrongCount === 2) { passes = 4; baseAlpha = 170; }
+  else                       { passes = 6; baseAlpha = 220; }
+
+  push();
+  noStroke();
+
+  for (let p = 0; p < passes; p++) {
+    // Each pass uses a vertical gradient faked with horizontal bands
+    // Fog is thicker at the bottom, thinner at the very top edge
+    let bands = 14;
+    for (let b = 0; b < bands; b++) {
+      // t = 0 at fogTop (thin), t = 1 at canvas bottom (thick)
+      let t      = b / bands;
+      let bandY  = fogTop + t * fogH;
+      let bandH  = fogH / bands + 1; // +1 avoids hairline gaps
+
+      // Quadratic ramp — stays thin at top, very heavy at bottom
+      let alpha  = baseAlpha * (t * t);
+      fill(200, 205, 215, alpha);
+      rect(0, bandY, width, bandH);
+    }
+  }
+
+  // Flat dense cap at the very bottom — ensures buttons are nearly invisible at stage 3
+  if (wrongCount >= 2) {
+    let capAlpha = wrongCount === 2 ? 160 : 230;
+    fill(200, 205, 215, capAlpha);
+    rect(0, fogTop + fogH * 0.55, width, fogH * 0.45);
+  }
+
+  // On stage 2+ add drifting fog wisps using a sine-wave ribbon
+  if (wrongCount >= 2) {
+    let wispAlpha = wrongCount >= 3 ? 90 : 55;
+    fill(210, 215, 220, wispAlpha);
+    beginShape();
+    vertex(0, fogTop);
+    for (let x = 0; x <= width; x += 6) {
+      let wave = sin((x * 0.015) + (frameCount * 0.018)) * 18
+               + sin((x * 0.030) + (frameCount * 0.011)) * 10;
+      vertex(x, fogTop + wave);
+    }
+    vertex(width, fogTop);
+    vertex(width, fogTop + 80);
+    vertex(0,     fogTop + 80);
+    endShape(CLOSE);
+  }
+
+  // Stage 3+: second heavier wisp ribbon higher up
+  if (wrongCount >= 3) {
+    fill(205, 210, 218, 70);
+    beginShape();
+    vertex(0, fogTop - 10);
+    for (let x = 0; x <= width; x += 6) {
+      let wave = sin((x * 0.020) + (frameCount * 0.013) + 1.5) * 14
+               + sin((x * 0.035) + (frameCount * 0.008)) * 8;
+      vertex(x, fogTop + wave - 10);
+    }
+    vertex(width, fogTop - 10);
+    vertex(width, fogTop + 50);
+    vertex(0,     fogTop + 50);
+    endShape(CLOSE);
+  }
+
+  pop();
 }
 
 function displayCompletion() {
