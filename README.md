@@ -67,7 +67,7 @@ _Second Improvement_
 We also suggested making the rituals more demanding by increasing precision requirements, such as varying how many times the pen must be clicked or changing the location of the stamp. This supports the overall game idea better, by providing a more accurate and immersive experience.
 These are the two implementations we came up with, these adjustments are necessary to create a more dynamic and challenging experience while reinforcing the repetitive and detail-focused mechanics that reflect the theme of the game.
 
-## 5. Assets
+## 6. Assets
 
 N/A
 
