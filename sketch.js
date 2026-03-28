@@ -5,7 +5,6 @@ let triedToOpenGateWithoutSubmission = false;
 let wrongCount = 0;
 let isMatch;
 let gameOver = false;
-// Each entry is "square", "triangle", or "none" (no shape = player decides freely)
 let shapeArray = ["square", "square", "triangle", "triangle", "none", "none"];
 let showModal = false;
 let modalX, modalY, modalW, modalH;
@@ -14,8 +13,8 @@ let guestIndex = 0;
 
 // Feedback shape shown on screen after guests 1 & 2 submit
 let showFeedbackShape = false;
-let feedbackShapeType = ""; // "square" or "triangle"
-let feedbackShapeTimer = 0; // counts down frames
+let feedbackShapeType = "";
+let feedbackShapeTimer = 0;
 
 // Weather system
 let raindrops = [];
@@ -23,23 +22,149 @@ let lightningTimer = 0;
 let lightningFlash = false;
 let thunderbolts = [];
 
+// ── In-game clock ──────────────────────────────────────────────────
+// Tracks fictional time of day in minutes from midnight
+// Morning starts 06:00 (360 min), afternoon 12:00 (720), night 18:00 (1080)
+const SHIFT_START_MINUTES = [360, 720, 1080]; // 06:00, 12:00, 18:00
+const SHIFT_MINUTES_PER_GUEST = [60, 30, 15]; // how many in-game minutes each served guest advances the clock
+let gameClockMinutes = 360; // current in-game time in minutes from midnight
+
+function initGameClock() {
+  gameClockMinutes = SHIFT_START_MINUTES[currentShift];
+}
+
+function tickGameClock() {
+  gameClockMinutes += SHIFT_MINUTES_PER_GUEST[currentShift];
+  // Cap at 23:59 (1439) so the clock doesn't wrap weirdly
+  if (gameClockMinutes > 1439) gameClockMinutes = 1439;
+}
+
+function drawGameClock() {
+  let sh = getCurrentShift();
+  let isNight = sh.id === "night";
+
+  // Position: top-right, just below the past-customers legend
+  let cx = width - 52,
+    cy = 100,
+    r = 34;
+
+  push();
+
+  // Panel background
+  noStroke();
+  fill(0, 0, 0, 40);
+  ellipse(cx + 3, cy + 4, (r + 14) * 2, (r + 14) * 2);
+
+  fill(isNight ? color(18, 28, 68, 230) : color(13, 67, 102, 215));
+  stroke(200, 165, 60, 180);
+  strokeWeight(1.5);
+  ellipse(cx, cy, (r + 14) * 2, (r + 14) * 2);
+
+  // Clock face
+  fill(isNight ? color(8, 12, 38) : color(240, 248, 255));
+  stroke(200, 165, 60, 120);
+  strokeWeight(1);
+  ellipse(cx, cy, r * 2, r * 2);
+
+  // Hour markers
+  for (let i = 0; i < 12; i++) {
+    let a = map(i, 0, 12, -HALF_PI, -HALF_PI + TWO_PI);
+    let isMajor = i % 3 === 0;
+    let r1 = r - (isMajor ? 8 : 5),
+      r2 = r - 2;
+    stroke(isNight ? color(160, 170, 220) : color(13, 67, 102));
+    strokeWeight(isMajor ? 2 : 1);
+    line(
+      cx + cos(a) * r1,
+      cy + sin(a) * r1,
+      cx + cos(a) * r2,
+      cy + sin(a) * r2,
+    );
+  }
+
+  // Clock hands
+  let totalMinutes = gameClockMinutes;
+  let h = totalMinutes / 60;
+  let m = totalMinutes % 60;
+
+  // Hour hand
+  let hAngle = map(h % 12, 0, 12, -HALF_PI, -HALF_PI + TWO_PI);
+  stroke(isNight ? color(200, 210, 255) : color(13, 67, 102));
+  strokeWeight(3);
+  line(cx, cy, cx + cos(hAngle) * (r * 0.55), cy + sin(hAngle) * (r * 0.55));
+
+  // Minute hand
+  let mAngle = map(m, 0, 60, -HALF_PI, -HALF_PI + TWO_PI);
+  stroke(isNight ? color(180, 195, 255) : color(40, 90, 160));
+  strokeWeight(2);
+  line(cx, cy, cx + cos(mAngle) * (r * 0.8), cy + sin(mAngle) * (r * 0.8));
+
+  // Centre dot
+  fill(200, 165, 60);
+  noStroke();
+  ellipse(cx, cy, 6, 6);
+
+  // Digital readout below
+  let hh = floor(h) % 24;
+  let mm = floor(m);
+  let ampm = hh >= 12 ? "PM" : "AM";
+  let hDisp = hh % 12 === 0 ? 12 : hh % 12;
+  let mDisp = nf(mm, 2);
+  let timeStr = hDisp + ":" + mDisp;
+
+  noStroke();
+  fill(isNight ? color(18, 28, 68, 210) : color(13, 67, 102, 200));
+  rect(cx - 28, cy + r + 6, 56, 18, 6);
+  fill(200, 165, 60);
+  textAlign(CENTER, CENTER);
+  textFont("Georgia, serif");
+  textSize(11);
+  text(timeStr + " " + ampm, cx, cy + r + 15);
+
+  pop();
+}
+
+// ── Shift / timer system ───────────────────────────────────────────
+let shiftTimerSeconds = 60; // current timer value (counts down)
+let shiftTimerMax = 60; // max for the current shift
+let shiftTimerActive = false; // only ticks while car is waiting & player has started clicking
+let timerStarted = false; // has the player clicked anything this turn?
+let timerExpired = false; // did the timer run out?
+let lastFrameTime = 0;
+let shiftGuestsCompleted = 0; // how many non-training guests done this shift
+
+// Training guests — first 2 get no timer
+const TRAINING_GUESTS = 2;
+
 // ── Car animation ──
-// Frozen display props — locked at the moment a car starts entering
 let frozenShape = "square";
 let frozenCarColor;
 let frozenAnimalName = "dog";
 let frozenGuestLabel = "Guest #1: Doug";
 
-let carAnimX; // current rendered X of car
-let carState = "entering"; // "entering" | "waiting" | "raising" | "exiting"
-let carStopX; // where the car parks
-let gateAngle = 0; // 0 = horizontal arm, -HALF_PI = fully raised
+let carAnimX;
+let carState = "entering";
+let carStopX;
+let gateAngle = 0;
+
+function resetShiftTimer() {
+  let sh = getCurrentShift();
+  shiftTimerMax = sh.timerSeconds;
+  shiftTimerSeconds = sh.timerSeconds;
+  shiftTimerActive = false;
+  timerStarted = false;
+  timerExpired = false;
+  lastFrameTime = millis();
+}
+
+function initGameClockForCurrentShift() {
+  gameClockMinutes = SHIFT_START_MINUTES[currentShift];
+}
 
 function setup() {
   createCanvas(1250, 680);
-
-  carStopX = width * 0.54; // car rests just left of the booth
-  carAnimX = -200; // start off-screen left
+  carStopX = width * 0.54;
+  carAnimX = -200;
 
   for (let i = shapeArray.length - 1; i > 0; i--) {
     let j = floor(random(i + 1));
@@ -64,8 +189,10 @@ function setup() {
     });
   }
 
-  // Set initial frozen props for the very first car
   refreshFrozenCar();
+  resetShiftTimer();
+  initGameClock();
+  lastFrameTime = millis();
 }
 
 function refreshFrozenCar() {
@@ -80,21 +207,18 @@ function refreshFrozenCar() {
     "bear",
   ];
   if (submissions.length === 0) {
-    // Guest 1: square shape shown on car
     frozenShape = "square";
     frozenCarColor = color(40, 120, 220);
     frozenGuestLabel = "Guest #1: Doug";
     frozenAnimalName = animalList[0];
   } else if (submissions.length === 1) {
-    // Guest 2: triangle shape shown on car
     frozenShape = "triangle";
     frozenCarColor = color(220, 60, 60);
     frozenGuestLabel = "Guest #2: Kitty";
     frozenAnimalName = animalList[1];
   } else {
     let shapeIndex = submissions.length - 2;
-    frozenShape = shapeArray[shapeIndex];
-    // "none" cars get a neutral grey colour
+    frozenShape = shapeArray[shapeIndex % shapeArray.length];
     if (frozenShape === "square") frozenCarColor = color(40, 120, 220);
     else if (frozenShape === "triangle") frozenCarColor = color(220, 60, 60);
     else frozenCarColor = color(100, 110, 130);
@@ -113,12 +237,80 @@ function draw() {
   }
 }
 
+// ── Timer tick ─────────────────────────────────────────────────────
+function tickTimer() {
+  // No timer for training guests
+  if (submissions.length < TRAINING_GUESTS) return;
+  if (!shiftTimerActive || timerExpired) return;
+
+  let now = millis();
+  let delta = (now - lastFrameTime) / 1000;
+  lastFrameTime = now;
+
+  shiftTimerSeconds = max(0, shiftTimerSeconds - delta);
+
+  if (shiftTimerSeconds <= 0 && !timerExpired) {
+    timerExpired = true;
+    // Auto-submit a wrong answer — penalise the player
+    _handleTimerExpiry();
+  }
+}
+
+function _handleTimerExpiry() {
+  wrongCount++;
+  submissions.push([]);
+  guestIndex++;
+  shiftGuestsCompleted++;
+  tickGameClock();
+
+  if (wrongCount >= 4) {
+    gameOver = true;
+    return;
+  }
+
+  // Check if shift should advance
+  _checkShiftAdvance();
+
+  clickHistory = [];
+  disabled = [false, false, false, false, false];
+  carState = "raising";
+}
+
+function _checkShiftAdvance() {
+  let sh = getCurrentShift();
+  // Night shift never ends naturally
+  if (sh.id === "night") return;
+  if (shiftGuestsCompleted >= sh.guestCount) {
+    // Advance to next shift after car exits
+    shiftGuestsCompleted = 0;
+    if (currentShift < SHIFTS.length - 1) {
+      currentShift++;
+      // Stage screen will fire after car exits — set a flag
+      pendingShiftTransition = true;
+    }
+  }
+}
+
+let pendingShiftTransition = false;
+
+function startTimerIfNeeded() {
+  if (submissions.length < TRAINING_GUESTS) return;
+  if (!timerStarted && carState === "waiting") {
+    timerStarted = true;
+    shiftTimerActive = true;
+    lastFrameTime = millis();
+  }
+}
+
 function updateCarAnim() {
   if (carState === "entering") {
     carAnimX = lerp(carAnimX, carStopX, 0.055);
     if (abs(carAnimX - carStopX) < 0.8) {
       carAnimX = carStopX;
       carState = "waiting";
+      // Reset timer for new guest
+      resetShiftTimer();
+      lastFrameTime = millis();
     }
   }
 
@@ -133,30 +325,34 @@ function updateCarAnim() {
   if (carState === "exiting") {
     carAnimX = lerp(carAnimX, width + 350, 0.07);
     if (carAnimX > width + 200) {
-      // Reset for next guest
       carAnimX = -200;
       gateAngle = 0;
       carState = "entering";
-      // clickHistory + disabled are already cleared at submit time
       refreshFrozenCar();
+
+      // Fire shift transition if needed
+      if (pendingShiftTransition) {
+        pendingShiftTransition = false;
+        gameState = "stage";
+        stageAutoStartMs = millis();
+        stageAnimFrame = 0;
+        stageFadeAlpha = 255;
+        initGameClock();
+      }
     }
   }
 }
 
 function drawWeather() {
-  if (wrongCount === 0) {
-    drawSunny();
-  } else if (wrongCount === 1) {
-    drawCloudy();
-  } else if (wrongCount === 2) {
-    drawRain(1.0);
-  } else {
+  if (wrongCount === 0) drawSunny();
+  else if (wrongCount === 1) drawCloudy();
+  else if (wrongCount === 2) drawRain(1.0);
+  else {
     drawRain(1.0);
     drawThunder();
   }
 }
 
-// Stage 2: overcast clouds only, no rain
 function drawCloudy() {
   noStroke();
   fill(160, 168, 182);
@@ -209,7 +405,6 @@ function drawRain(intensity) {
   ellipse(620, 55, 190, 75);
   ellipse(850, 70, 160, 65);
   ellipse(1050, 60, 200, 70);
-
   let activeCount = floor(raindrops.length * intensity);
   stroke(150, 180, 220, map(intensity, 0.3, 1.0, 100, 200));
   strokeWeight(1.5);
@@ -266,15 +461,131 @@ function drawThunder() {
   }
 }
 
+// ── Night-shift sky overlay ────────────────────────────────────────
+function drawNightOverlay() {
+  let sh = getCurrentShift();
+  if (sh.id !== "night") return;
+  // Dark vignette tint
+  noStroke();
+  fill(8, 12, 35, 160);
+  rect(0, 0, width, height);
+  // Stars scattered above road
+  randomSeed(42);
+  fill(220, 225, 255);
+  for (let i = 0; i < 80; i++) {
+    let sx = random(width),
+      sy = random(roadY - 10);
+    let sr = random(0.8, 2.0);
+    let alpha = 140 + sin(frameCount * 0.03 + i) * 80;
+    fill(220, 225, 255, alpha);
+    noStroke();
+    ellipse(sx, sy, sr * 2, sr * 2);
+  }
+  // Moon
+  let mx = width - 160,
+    my = 70;
+  fill(240, 240, 210, 220);
+  noStroke();
+  ellipse(mx, my, 70, 70);
+  fill(8, 12, 35);
+  noStroke();
+  ellipse(mx + 18, my - 5, 62, 62);
+  for (let i = 4; i > 0; i--) {
+    fill(200, 210, 180, i * 7);
+    ellipse(mx, my, 70 + i * 12, 70 + i * 12);
+  }
+  // Street lamps
+  _nightLamp(width * 0.15, roadY);
+  _nightLamp(width * 0.45, roadY);
+  _nightLamp(width * 0.78, roadY);
+}
+
+function _nightLamp(x, ry) {
+  stroke(140, 140, 160);
+  strokeWeight(3);
+  line(x, ry, x, ry - 110);
+  fill(160, 160, 180);
+  noStroke();
+  rect(x - 14, ry - 118, 28, 11, 4);
+  fill(255, 245, 200, 200);
+  noStroke();
+  rect(x - 10, ry - 116, 20, 7, 3);
+  // Cone
+  for (let i = 0; i < 16; i++) {
+    fill(255, 240, 180, map(i, 0, 16, 22, 0));
+    let w = i * 14;
+    triangle(x, ry - 108, x - w, ry, x + w, ry);
+  }
+}
+
+// Ambient sky helpers for in-game (drawn before weather clouds)
+function _drawMorningSky() {
+  // Horizon warm glow
+  noStroke();
+  for (let i = 0; i < 30; i++) {
+    fill(255, 140, 50, map(i, 0, 30, 60, 0));
+    ellipse(width / 2, roadY, width * 1.1 + i * 20, 120 + i * 8);
+  }
+  // Rising sun behind everything
+  let sunX = width * 0.15,
+    sunY = roadY - 60;
+  noStroke();
+  for (let i = 5; i > 0; i--) {
+    fill(255, 200, 80, i * 14);
+    ellipse(sunX, sunY, 90 + i * 18, 90 + i * 18);
+  }
+  fill(255, 225, 80);
+  ellipse(sunX, sunY, 90, 90);
+  stroke(255, 200, 60, 120);
+  strokeWeight(2);
+  for (let a = 0; a < TWO_PI; a += PI / 7) {
+    line(
+      sunX + cos(a) * 50,
+      sunY + sin(a) * 50,
+      sunX + cos(a) * 70,
+      sunY + sin(a) * 70,
+    );
+  }
+}
+
+function _drawAfternoonSun() {
+  let sunX = width - 110,
+    sunY = 72;
+  noStroke();
+  for (let i = 4; i > 0; i--) {
+    fill(255, 230, 100, i * 12);
+    ellipse(sunX, sunY, 80 + i * 16, 80 + i * 16);
+  }
+  fill(255, 235, 70);
+  ellipse(sunX, sunY, 80, 80);
+  stroke(255, 215, 60, 150);
+  strokeWeight(2.2);
+  for (let a = 0; a < TWO_PI; a += PI / 6) {
+    line(
+      sunX + cos(a) * 44,
+      sunY + sin(a) * 44,
+      sunX + cos(a) * 62 + sin(frameCount * 0.04 + a) * 3,
+      sunY + sin(a) * 62,
+    );
+  }
+}
+
 function runGame() {
-  let skyColor;
-  if (wrongCount === 0) skyColor = color(212, 235, 250);
-  else if (wrongCount === 1) skyColor = color(175, 188, 205);
-  else if (wrongCount === 2) skyColor = color(120, 135, 152);
-  else skyColor = color(72, 82, 98);
+  // Sky colour — blends shift base colour with weather darkening
+  let sh = getCurrentShift();
+
+  // Base sky per shift (clear-weather)
+  let clearSky;
+  if (sh.id === "morning") clearSky = color(255, 210, 140);
+  else if (sh.id === "afternoon") clearSky = color(130, 195, 245);
+  else clearSky = color(18, 22, 48);
+
+  // Weather darkening overlay
+  let stormSky = color(72, 82, 98);
+  let stormAmt = constrain(wrongCount / 3, 0, 1);
+  let skyColor = lerpColor(clearSky, stormSky, stormAmt);
   background(skyColor);
 
-  // Game over — draw the scene then overlay and stop
   if (gameOver) {
     drawWeather();
     drawRoad();
@@ -282,24 +593,28 @@ function runGame() {
     return;
   }
 
+  // Shift-specific ambient sky (drawn before weather clouds)
+  if (sh.id === "morning" && wrongCount === 0) _drawMorningSky();
+  else if (sh.id === "afternoon") _drawAfternoonSun();
+  else if (sh.id === "night") drawNightOverlay();
+
   updateCarAnim();
+  tickTimer();
 
   drawWeather();
   drawRoad();
 
-  // Tick feedback shape timer
   if (showFeedbackShape) {
     feedbackShapeTimer--;
     if (feedbackShapeTimer <= 0) showFeedbackShape = false;
     drawFeedbackShape();
   }
 
-  if (submissions.length < 8) {
+  if (submissions.length >= 0) {
     fill(255);
     drawOptions();
     drawMessage();
     displayShapes();
-    // Only allow submit + menu interaction while car is waiting
     if (carState === "waiting") {
       submitButton();
     }
@@ -313,30 +628,205 @@ function runGame() {
       frozenAnimalName,
       frozenGuestLabel,
     );
+
+    // Draw timer and clock (only after training)
+    if (submissions.length >= TRAINING_GUESTS) {
+      drawShiftTimer();
+      drawShiftBadge();
+      drawGameClock();
+    }
   }
+
   drawFog();
+  if (timerExpired && carState === "waiting") drawTimerExpiredOverlay();
   if (showModal) drawModal();
   displayCompletion();
 }
 
+// ── Timer widget ───────────────────────────────────────────────────
+function drawShiftTimer() {
+  let sh = getCurrentShift();
+  let isTraining = submissions.length < TRAINING_GUESTS;
+  if (isTraining) return;
+
+  let x = 18,
+    y = height / 2 - 80;
+  let w = 74,
+    h = 160;
+
+  push();
+
+  // Panel background
+  noStroke();
+  fill(0, 0, 0, 50);
+  rect(x + 3, y + 4, w, h, 10);
+
+  let panelCol =
+    sh.id === "night" ? color(18, 28, 68, 230) : color(13, 67, 102, 220);
+  fill(panelCol);
+  stroke(sh.id === "night" ? color(80, 110, 210) : color(200, 165, 60));
+  strokeWeight(1.5);
+  rect(x, y, w, h, 10);
+
+  // Header
+  noStroke();
+  fill(200, 165, 60, 220);
+  rect(x + 1, y + 1, w - 2, 22, 9, 9, 0, 0);
+  fill(18, 28, 68);
+  textAlign(CENTER, CENTER);
+  textFont("sans-serif");
+  textSize(9);
+  text("TIME", x + w / 2, y + 12);
+
+  // Timer value
+  let ratio = shiftTimerSeconds / shiftTimerMax;
+  let urgent = ratio < 0.3;
+  let timerCol = timerExpired
+    ? color(220, 50, 50)
+    : urgent
+      ? color(255, 140, 0)
+      : color(255, 255, 255);
+
+  // Arc background track
+  noFill();
+  stroke(255, 255, 255, 30);
+  strokeWeight(7);
+  arc(x + w / 2, y + 74, 48, 48, -HALF_PI, -HALF_PI + TWO_PI);
+
+  // Arc fill
+  if (!timerExpired && ratio > 0) {
+    stroke(timerCol);
+    strokeWeight(7);
+    noFill();
+    arc(x + w / 2, y + 74, 48, 48, -HALF_PI, -HALF_PI + TWO_PI * ratio);
+  }
+
+  // Pulse ring when urgent
+  if (urgent && !timerExpired) {
+    let pulse = sin(frameCount * 0.2) * 0.5 + 0.5;
+    noFill();
+    stroke(255, 80, 50, 80 * pulse);
+    strokeWeight(12);
+    ellipse(x + w / 2, y + 74, 58, 58);
+  }
+
+  // Seconds text
+  noStroke();
+  fill(timerCol);
+  textAlign(CENTER, CENTER);
+  textFont("Georgia, serif");
+  textSize(timerExpired ? 13 : 22);
+  if (timerExpired) {
+    text("TIME\nOUT", x + w / 2, y + 74);
+  } else if (!timerStarted && carState === "waiting") {
+    fill(255, 255, 255, 140);
+    textFont("sans-serif");
+    textSize(10);
+    text("click to\nstart", x + w / 2, y + 74);
+  } else {
+    text(ceil(shiftTimerSeconds), x + w / 2, y + 74);
+  }
+
+  // "seconds" label
+  if (!timerExpired) {
+    noStroke();
+    fill(200, 165, 60, 180);
+    textFont("sans-serif");
+    textSize(8);
+    textAlign(CENTER, CENTER);
+    text("seconds", x + w / 2, y + 104);
+  }
+
+  // Shift indicator dots at bottom
+  let dotY = y + h - 18;
+  for (let i = 0; i < SHIFTS.length; i++) {
+    let filled = i <= currentShift;
+    let dotX = x + w / 2 + (i - 1) * 16;
+    if (filled) {
+      fill(200, 165, 60);
+      noStroke();
+    } else {
+      noFill();
+      stroke(200, 165, 60, 80);
+      strokeWeight(1);
+    }
+    ellipse(dotX, dotY, 7, 7);
+  }
+
+  pop();
+}
+
+// ── Shift badge (top-left of screen) ──────────────────────────────
+function drawShiftBadge() {
+  let sh = getCurrentShift();
+  let names = ["Morning", "Afternoon", "Night"];
+  let icons = ["☀", "☀", "☾"];
+  let label = icons[currentShift] + "  " + names[currentShift];
+  let isNight = sh.id === "night";
+
+  push();
+  let bx = 18,
+    by = 8,
+    bw = 138,
+    bh = 28;
+
+  noStroke();
+  fill(0, 0, 0, 40);
+  rect(bx + 2, by + 2, bw, bh, 14);
+
+  fill(isNight ? color(18, 28, 68, 220) : color(13, 67, 102, 200));
+  stroke(200, 165, 60, 160);
+  strokeWeight(1);
+  rect(bx, by, bw, bh, 14);
+
+  noStroke();
+  fill(200, 165, 60);
+  textAlign(CENTER, CENTER);
+  textFont("sans-serif");
+  textSize(12);
+  text(label + " Shift", bx + bw / 2, by + bh / 2 + 1);
+  pop();
+}
+
+// ── Timer-expired overlay ──────────────────────────────────────────
+function drawTimerExpiredOverlay() {
+  push();
+  noStroke();
+  fill(180, 20, 20, 12 + sin(frameCount * 0.15) * 8);
+  rect(0, 0, width, height);
+  pop();
+}
+
 function mousePressed() {
-  if (gameState === "start") handleStartClick();
-
-  // Block all interaction after game over
+  if (gameState === "start") {
+    handleStartClick();
+    return;
+  }
+  if (gameState === "stage") {
+    handleStageClick();
+    return;
+  }
   if (gameOver) return;
-
-  // Block modal/menu interactions during animation
   if (carState !== "waiting") return;
 
-  // When a modal is open, only process modal clicks — block everything else
   if (showModal) {
     modalMouseClicked();
     return;
   }
 
   modalMouseClicked();
+
+  // Start timer on first interaction
+  if (!timerStarted && submissions.length >= TRAINING_GUESTS) {
+    startTimerIfNeeded();
+  }
+
   bottomMenuMouseClicked();
 
+  // Also start timer when a menu button is clicked
+  startTimerIfNeeded();
+
+  // Submit button
   let submitSize = 100,
     submitHeight = submitSize + 200;
   let submitX = width - submitSize - 10;
@@ -352,28 +842,25 @@ function mousePressed() {
       return;
     }
     triedToOpenGateWithoutSubmission = false;
+    shiftTimerActive = false; // stop timer
+    timerExpired = false;
 
     guestIndex++;
     submissions.push([...clickHistory]);
-    console.log("Saved submission:", clickHistory);
-    console.log("All submissions:", submissions);
 
     if (submissions.length === 1) {
-      // Guest 1 just submitted — show square as feedback
       showFeedbackShape = true;
       feedbackShapeType = "square";
-      feedbackShapeTimer = 180; // ~3 seconds at 60fps
+      feedbackShapeTimer = 180;
     } else if (submissions.length === 2) {
-      // Guest 2 just submitted — show triangle as feedback
       showFeedbackShape = true;
       feedbackShapeType = "triangle";
       feedbackShapeTimer = 180;
     } else if (submissions.length >= 3) {
       let highlightedIndex = submissions.length - 3;
-      let guestShape = shapeArray[highlightedIndex];
+      let guestShape = shapeArray[highlightedIndex % shapeArray.length];
 
       if (guestShape === "none") {
-        // No shape = player may click anything; always a match
         isMatch = true;
       } else {
         let patternToMatch =
@@ -385,57 +872,54 @@ function mousePressed() {
 
       if (!isMatch) {
         wrongCount++;
-        if (wrongCount >= 4) gameOver = true;
-      } else if (wrongCount > 0) wrongCount = max(0, wrongCount - 1);
+        if (wrongCount >= 4) {
+          gameOver = true;
+        }
+      } else if (wrongCount > 0) {
+        wrongCount = max(0, wrongCount - 1);
+      }
+
+      if (!gameOver) {
+        shiftGuestsCompleted++;
+        _checkShiftAdvance();
+      }
     }
 
-    // Reset history immediately so the menu is clean when the next car arrives
     clickHistory = [];
     disabled = [false, false, false, false, false];
-    // Trigger exit sequence — gate raises, then car drives off
+    tickGameClock();
     carState = "raising";
   }
 }
 
 function drawGameOver() {
-  // Dark semi-transparent overlay
   noStroke();
   fill(0, 0, 0, 160);
   rect(0, 0, width, height);
-
-  // Red flicker vignette
   fill(120, 0, 0, 60);
   rect(0, 0, width, height);
 
-  // Card
   let cW = 520,
     cH = 300;
-  let cX = width / 2 - cW / 2;
-  let cY = height / 2 - cH / 2;
+  let cX = width / 2 - cW / 2,
+    cY = height / 2 - cH / 2;
 
-  // Card shadow
   fill(0, 0, 0, 80);
   noStroke();
   rect(cX + 8, cY + 8, cW, cH, 14);
-
-  // Card body
   fill(22, 22, 28);
   stroke(180, 20, 20);
   strokeWeight(3);
   rect(cX, cY, cW, cH, 12);
-
-  // Red top bar
   fill(160, 20, 20);
   noStroke();
   rect(cX, cY, cW, 48, 12, 12, 0, 0);
 
-  // Title
   fill(255);
   textAlign(CENTER, CENTER);
   textSize(30);
   text("SHIFT OVER", width / 2, cY + 24);
 
-  // Icon — rain cloud
   let ix = width / 2,
     iy = cY + 100;
   fill(100, 110, 130);
@@ -445,7 +929,6 @@ function drawGameOver() {
   ellipse(ix + 48, iy + 2, 40, 32);
   fill(80, 90, 108);
   rect(ix - 42, iy + 10, 100, 24, 0, 0, 6, 6);
-  // Rain drops
   stroke(150, 180, 220, 200);
   strokeWeight(2);
   for (let [dx, dy] of [
@@ -454,11 +937,9 @@ function drawGameOver() {
     [4, 18],
     [20, 24],
     [36, 18],
-  ]) {
+  ])
     line(ix + dx, iy + dy, ix + dx - 2, iy + dy + 10);
-  }
 
-  // Message
   noStroke();
   fill(210, 210, 220);
   textAlign(CENTER, CENTER);
@@ -468,13 +949,10 @@ function drawGameOver() {
     width / 2,
     cY + 188,
   );
-
-  // Sub-message
   fill(140, 140, 160);
   textSize(13);
   text("Refresh the page to try again.", width / 2, cY + 218);
 
-  // Bottom rule
   stroke(80, 20, 20);
   strokeWeight(1);
   line(cX + 30, cY + cH - 28, cX + cW - 30, cY + cH - 28);
@@ -484,18 +962,13 @@ function drawGameOver() {
   text("PAWS PARKING AUTHORITY", width / 2, cY + cH - 14);
 }
 
-// ── Feedback shape — shown briefly after guests 1 & 2 submit ──────
 function drawFeedbackShape() {
   let alpha =
-    feedbackShapeTimer > 60 ? 255 : map(feedbackShapeTimer, 0, 60, 0, 255); // fade out in last second
-
-  let cx = width / 2;
-  let cy = height / 2 - 60;
-  let sz = 90;
-
+    feedbackShapeTimer > 60 ? 255 : map(feedbackShapeTimer, 0, 60, 0, 255);
+  let cx = width / 2,
+    cy = height / 2 - 60,
+    sz = 90;
   push();
-
-  // Glow halo
   noStroke();
   if (feedbackShapeType === "square") {
     fill(40, 120, 220, alpha * 0.18);
@@ -512,8 +985,6 @@ function drawFeedbackShape() {
       cy + hh * 0.8,
     );
   }
-
-  // Shape
   if (feedbackShapeType === "square") {
     fill(40, 120, 220, alpha);
     stroke(255, 255, 255, alpha * 0.6);
@@ -526,14 +997,14 @@ function drawFeedbackShape() {
     let h = sz * 0.866;
     triangle(cx, cy - h / 2, cx - sz / 2, cy + h / 2, cx + sz / 2, cy + h / 2);
   }
-
-  // Label beneath shape
   noStroke();
   fill(13, 67, 102, alpha);
   textAlign(CENTER, CENTER);
   textSize(14);
-  let label = feedbackShapeType === "square" ? "Ritual 1" : "Ritual 2";
-  text(label, cx, cy + sz * 0.75);
-
+  text(
+    feedbackShapeType === "square" ? "Ritual 1" : "Ritual 2",
+    cx,
+    cy + sz * 0.75,
+  );
   pop();
 }

@@ -1,726 +1,445 @@
-// stages.js — Day transition screens shown before each shift begins
+// stages.js — shift transition screens and phase management
 
-// ─────────────────────────────────────────────
-// State
-// ─────────────────────────────────────────────
-let stageTimer = 0; // counts up in frames
-let stageDuration = 180; // 3 seconds at 60 fps
-let speechVisible = true; // controls speech bubble fade
-let stageDone = false; // flips to true when transition ends
+// ── Shift definitions ──────────────────────────────────────────────
+// Each shift has: name, sky colours, timer duration (seconds), guest count
+const SHIFTS = [
+  {
+    id: "morning",
+    label: "MORNING SHIFT",
+    sublabel: "06:00 – 12:00",
+    timerSeconds: 60,
+    guestCount: 3, // guests 3-5 (after 2 training guests)
+    skyTop: [255, 200, 120],
+    skyBot: [255, 235, 180],
+    ambientDesc: "Take your time — the morning rush is gentle.",
+    icon: "sunrise",
+  },
+  {
+    id: "afternoon",
+    label: "AFTERNOON SHIFT",
+    sublabel: "12:00 – 18:00",
+    timerSeconds: 30,
+    guestCount: 3, // guests 6-8
+    skyTop: [100, 170, 230],
+    skyBot: [180, 215, 245],
+    ambientDesc: "Lunch rush. Things are picking up speed.",
+    icon: "sun",
+  },
+  {
+    id: "night",
+    label: "NIGHT SHIFT",
+    sublabel: "18:00 – ???",
+    timerSeconds: 15,
+    guestCount: Infinity, // endless until game over
+    skyTop: [18, 22, 48],
+    skyBot: [35, 42, 78],
+    ambientDesc: "Graveyard shift. Don't blink.",
+    icon: "moon",
+  },
+];
 
-// ─────────────────────────────────────────────
-// Entry point — called from draw() when
-// gameState === "stage"
-// ─────────────────────────────────────────────
+let currentShift = 0; // index into SHIFTS
+let stagePhase = "intro"; // "intro" | "play"
+let stageFadeAlpha = 255;
+let stageAnimFrame = 0;
+let stageAutoStartMs = 0; // millis() timestamp when the stage screen appeared
+const STAGE_HOLD_MS = 5000; // how long to show the card before auto-starting
+
+// Stars for night shift intro
+let stageStars = [];
+function _buildStars() {
+  stageStars = [];
+  for (let i = 0; i < 120; i++) {
+    stageStars.push({
+      x: random(width),
+      y: random(height * 0.65),
+      r: random(0.8, 2.2),
+      twinkle: random(TWO_PI),
+    });
+  }
+}
+
+function resetStage() {
+  currentShift = 0;
+  stagePhase = "intro";
+  stageFadeAlpha = 255;
+  stageAnimFrame = 0;
+  stageAutoStartMs = millis();
+  _buildStars();
+  if (typeof resetShiftTimer === "function") resetShiftTimer();
+}
+
+function advanceShift() {
+  if (currentShift < SHIFTS.length - 1) {
+    currentShift++;
+    stagePhase = "intro";
+    stageFadeAlpha = 255;
+    stageAnimFrame = 0;
+    stageAutoStartMs = millis();
+    _buildStars();
+    if (typeof resetShiftTimer === "function") resetShiftTimer();
+  }
+}
+
+function getCurrentShift() {
+  return SHIFTS[currentShift];
+}
+
+// ── Stage transition screen ────────────────────────────────────────
 function drawStageScreen() {
-  stageTimer++;
+  stageAnimFrame++;
+  let sh = SHIFTS[currentShift];
 
-  // After 5 s, jump straight to play
-  if (stageTimer >= stageDuration) {
-    if (!stageDone) {
-      stageDone = true;
-      gameState = "play";
-    }
+  // Auto-advance after STAGE_HOLD_MS
+  let elapsed = millis() - stageAutoStartMs;
+  if (elapsed >= STAGE_HOLD_MS) {
+    gameState = "play";
+    if (typeof resetShiftTimer === "function") resetShiftTimer();
     return;
   }
 
-  // Speech bubble fades out in the last 60 frames (1 s)
-  speechVisible = stageTimer < stageDuration - 60;
+  // ── Sky gradient ──
+  let t = [sh.skyTop[0], sh.skyTop[1], sh.skyTop[2]];
+  let b = [sh.skyBot[0], sh.skyBot[1], sh.skyBot[2]];
+  for (let y = 0; y < height; y++) {
+    let f = y / height;
+    stroke(lerp(t[0], b[0], f), lerp(t[1], b[1], f), lerp(t[2], b[2], f));
+    line(0, y, width, y);
+  }
 
-  drawBoothInterior();
-  drawDeskAndProps();
-  drawDayCalendar(width * 0.32, height * 0.7);
-  drawSeatedAttendant(width * 0.8, height * 0.72);
-  if (speechVisible) {
-    drawSpeechBubble(
-      width * 0.8 - 14,
-      height * 0.72 - 180,
-      "First day at work!\nI'm kind of nervous.",
+  // ── Ambient scene elements ──
+  if (sh.icon === "sunrise") _drawSunriseScene();
+  else if (sh.icon === "sun") _drawAfternoonScene();
+  else _drawNightScene();
+
+  // ── Card ──
+  _drawShiftCard(sh);
+
+  // ── Fade-in overlay ──
+  if (stageFadeAlpha > 0) {
+    noStroke();
+    fill(0, 0, 0, stageFadeAlpha);
+    rect(0, 0, width, height);
+    stageFadeAlpha = max(0, stageFadeAlpha - 6);
+  }
+}
+
+// ── Scene helpers ──────────────────────────────────────────────────
+function _drawSunriseScene() {
+  // Horizon glow
+  noStroke();
+  for (let i = 0; i < 40; i++) {
+    let alpha = map(i, 0, 40, 80, 0);
+    fill(255, 160, 60, alpha);
+    ellipse(width / 2, height * 0.52, width * 0.8 + i * 18, 80 + i * 6);
+  }
+  // Sun rising
+  let sunY = height * 0.48 - sin(stageAnimFrame * 0.012) * 12;
+  fill(255, 220, 50);
+  noStroke();
+  ellipse(width / 2, sunY, 100, 100);
+  stroke(255, 200, 50, 140);
+  strokeWeight(2.5);
+  for (let a = 0; a < TWO_PI; a += PI / 7) {
+    let r1 = 58,
+      r2 = 82 + sin(stageAnimFrame * 0.04 + a) * 5;
+    line(
+      width / 2 + cos(a) * r1,
+      sunY + sin(a) * r1,
+      width / 2 + cos(a) * r2,
+      sunY + sin(a) * r2,
     );
   }
-  drawContinueHint();
+  // Road
+  _drawStageRoad();
+  // Soft clouds
+  noStroke();
+  fill(255, 255, 240, 200);
+  ellipse(200, 110, 170, 64);
+  ellipse(300, 95, 130, 52);
+  ellipse(900, 130, 190, 68);
+  ellipse(1010, 115, 150, 58);
 }
 
-// ─────────────────────────────────────────────
-// Reset — call this every time we enter a stage
-// ─────────────────────────────────────────────
-function resetStage() {
-  stageTimer = 0;
-  speechVisible = true;
-  stageDone = false;
-}
-
-// ─────────────────────────────────────────────
-// Interior background — wood-panelled booth room
-// ─────────────────────────────────────────────
-function drawBoothInterior() {
-  // Back wall — warm off-white plaster
-  background(232, 225, 210);
-
-  // Wall panel lines (vertical tongue-and-groove)
-  stroke(210, 200, 182);
-  strokeWeight(1);
-  for (let x = 40; x < width; x += 48) {
-    line(x, 19, x, height * 0.86);
+function _drawAfternoonScene() {
+  // High sun
+  let sunX = width * 0.82,
+    sunY = 80;
+  noStroke();
+  fill(255, 230, 60);
+  ellipse(sunX, sunY, 90, 90);
+  stroke(255, 210, 50, 160);
+  strokeWeight(2);
+  for (let a = 0; a < TWO_PI; a += PI / 6) {
+    let r1 = 50,
+      r2 = 72 + sin(stageAnimFrame * 0.05 + a) * 4;
+    line(
+      sunX + cos(a) * r1,
+      sunY + sin(a) * r1,
+      sunX + cos(a) * r2,
+      sunY + sin(a) * r2,
+    );
   }
-
-  // Dado rail — horizontal divider at 86% height
-  fill(180, 155, 110);
+  // Crisp blue clouds
   noStroke();
-  rect(0, height * 0.86, width, 10);
+  fill(255, 255, 255, 230);
+  ellipse(160, 90, 190, 72);
+  ellipse(270, 74, 150, 60);
+  ellipse(700, 80, 180, 68);
+  ellipse(820, 68, 140, 56);
+  _drawStageRoad();
+}
 
-  // Lower wainscot — slightly darker warm wood tone
-  fill(200, 175, 130);
-  rect(0, height * 0.86 + 10, width, height - height * 0.86 - 10);
-
-  // Floor — darker planks
-  fill(155, 120, 78);
+function _drawNightScene() {
+  // Stars
   noStroke();
-  rect(0, height * 0.92, width, height - height * 0.92);
-  stroke(130, 100, 60);
-  strokeWeight(1);
-  for (let x = 0; x < width; x += 80) {
-    line(x, height * 0.92, x, height);
+  for (let s of stageStars) {
+    let alpha = 160 + sin(stageAnimFrame * 0.04 + s.twinkle) * 80;
+    fill(220, 225, 255, alpha);
+    ellipse(s.x, s.y, s.r * 2, s.r * 2);
   }
-  // Floor highlight
+  // Moon
+  let mx = width * 0.78,
+    my = 90;
+  fill(240, 240, 210);
   noStroke();
-  fill(255, 255, 255, 18);
-  rect(0, height * 0.92, width, 6);
-
-  // Service window dominates the back wall
-  drawInteriorWindow();
-
-  // Navy top accent strip
-  fill(13, 67, 102);
+  ellipse(mx, my, 80, 80);
+  // Crescent shadow
+  fill(35, 42, 78);
   noStroke();
-  rect(0, 0, width, 14);
-  // Gold band beneath it
-  fill(200, 165, 60);
-  noStroke();
-  rect(0, 14, width, 5);
-}
-
-// Window — small, right side of wall, desk sits beneath it
-function drawInteriorWindow() {
-  let ww = width * 0.18,
-    wh = height * 0.36;
-  let wx = width * 0.74; // right side of canvas
-  let wy = height * 0.16; // upper portion of wall
-
-  // Frame shadow
-  noStroke();
-  fill(0, 0, 0, 25);
-  rect(wx - 4, wy - 4, ww + 12, wh + 12, 5);
-
-  // Frame
-  fill(100, 75, 45);
-  stroke(60, 40, 20);
-  strokeWeight(2);
-  rect(wx - 6, wy - 6, ww + 12, wh + 12, 4);
-
-  // Outside sky
-  fill(212, 235, 250);
-  noStroke();
-  rect(wx, wy, ww, wh);
-
-  // Road strip
-  fill(55, 58, 62);
-  noStroke();
-  rect(wx, wy + wh * 0.72, ww, wh * 0.18);
-  fill(80, 140, 70);
-  rect(wx, wy + wh * 0.9, ww, wh * 0.1);
-  // Road dashes
-  stroke(255, 255, 255, 180);
-  strokeWeight(2);
-  let lY = wy + wh * 0.81;
-  for (let x = wx; x < wx + ww; x += 28) line(x, lY, x + 16, lY);
-
-  // Sun
-  noStroke();
-  fill(255, 220, 50);
-  ellipse(wx + ww * 0.8, wy + wh * 0.16, 28, 28);
-
-  // Cross dividers (4 panes)
-  fill(100, 75, 45);
-  noStroke();
-  rect(wx, wy + wh / 2 - 3, ww, 6);
-  rect(wx + ww / 2 - 3, wy, 6, wh);
-
-  // Glass glint
-  noStroke();
-  fill(255, 255, 255, 55);
-  rect(wx + 4, wy + 4, ww * 0.28, wh * 0.42, 2);
-
-  // Window sill — the desk surface acts as the sill below
-  fill(130, 100, 60);
-  stroke(80, 55, 25);
-  strokeWeight(1);
-  rect(wx - 10, wy + wh + 6, ww + 20, 12, 2);
-
-  // Cactus on sill
-  drawMiniCactus(wx + ww * 0.5, wy + wh + 4);
-}
-
-function drawMiniCactus(cx, baseY) {
-  push();
-  // Pot
-  fill(180, 100, 60);
-  stroke(120, 65, 30);
-  strokeWeight(1);
-  rect(cx - 8, baseY - 14, 16, 12, 2);
-  // Soil
-  fill(100, 65, 30);
-  noStroke();
-  ellipse(cx, baseY - 14, 16, 5);
-  // Cactus stem
-  fill(80, 140, 70);
-  stroke(50, 100, 45);
-  strokeWeight(1);
-  rect(cx - 4, baseY - 32, 8, 18, 3);
-  // Arms
-  rect(cx - 10, baseY - 28, 7, 5, 2);
-  rect(cx + 3, baseY - 24, 7, 5, 2);
-  // Spines
-  stroke(200, 200, 160);
-  strokeWeight(0.8);
-  line(cx - 2, baseY - 30, cx - 2, baseY - 34);
-  line(cx + 2, baseY - 30, cx + 2, baseY - 34);
-  pop();
-}
-
-function drawWallLamp(lx, ly) {
-  push();
-  // Bracket arm
-  fill(80, 65, 45);
-  stroke(50, 38, 22);
-  strokeWeight(1);
-  rect(lx - 3, ly, 6, 22, 2);
-  // Lamp shade
-  fill(245, 210, 120);
-  stroke(180, 140, 60);
-  strokeWeight(1.2);
-  triangle(lx - 18, ly + 22, lx + 18, ly + 22, lx, ly + 4);
-  // Bulb glow
-  noStroke();
-  fill(255, 240, 180, 90);
-  ellipse(lx, ly + 28, 60, 40);
-  fill(255, 245, 200, 50);
-  ellipse(lx, ly + 36, 110, 60);
-  pop();
-}
-
-// ─────────────────────────────────────────────
-// Desk and props
-// ─────────────────────────────────────────────
-function drawDeskAndProps() {
-  let deskY = height * 0.65;
-  let deskH = height * 0.2;
-  let deskX = 0;
-  let deskW = width;
-
-  // Desk top surface
-  fill(160, 120, 70);
-  stroke(100, 72, 35);
-  strokeWeight(2);
-  rect(deskX, deskY, deskW, deskH);
-
-  // Desk top highlight
-  noStroke();
-  fill(255, 255, 255, 22);
-  rect(deskX, deskY, deskW, 8);
-
-  // Desk front face (darker)
-  fill(120, 88, 48);
-  noStroke();
-  rect(deskX, deskY + deskH * 0.55, deskW, deskH * 0.45);
-
-  // Desk edge trim
-  fill(100, 72, 35);
-  noStroke();
-  rect(deskX, deskY - 4, deskW, 8, 2);
-
-  // ── Props on desk ──
-
-  // Pen holder — right side near attendant
-  drawPenHolder(width * 0.72, deskY);
-
-  // Stack of papers — beside pen holder
-  drawPenHolder(width * 0.86, deskY);
-
-  // Small radio — far right edge
-  drawDeskRadio(width * 0.95, deskY);
-}
-
-function drawPenHolder(cx, deskY) {
-  push();
-  // Cup
-  fill(13, 67, 102);
-  stroke(8, 44, 70);
-  strokeWeight(1);
-  rect(cx - 10, deskY - 28, 20, 28, 3, 3, 0, 0);
-  // Pens sticking out
-  stroke(60, 80, 180);
-  strokeWeight(2);
-  line(cx - 3, deskY - 28, cx - 5, deskY - 48);
-  stroke(180, 40, 40);
-  strokeWeight(2);
-  line(cx + 3, deskY - 28, cx + 5, deskY - 50);
-  stroke(40, 120, 60);
-  strokeWeight(2);
-  line(cx, deskY - 28, cx, deskY - 46);
-  // Gold band on cup
-  fill(200, 165, 60);
-  noStroke();
-  rect(cx - 10, deskY - 10, 20, 4);
-  pop();
-}
-
-function drawPaperStack(cx, deskY) {
-  push();
-  // Three slightly offset sheets
-  for (let i = 2; i >= 0; i--) {
-    fill(245, 242, 235);
-    stroke(180, 170, 150);
-    strokeWeight(0.8);
-    rect(cx - 28 + i * 2, deskY - 18 - i * 3, 56, 22, 1);
-    // Ruled lines on top sheet
-    if (i === 0) {
-      stroke(190, 185, 175);
-      strokeWeight(0.7);
-      line(cx - 22, deskY - 13, cx + 22, deskY - 13);
-      line(cx - 22, deskY - 8, cx + 14, deskY - 8);
-      line(cx - 22, deskY - 3, cx + 18, deskY - 3);
-    }
+  ellipse(mx + 22, my - 6, 72, 72);
+  // Glow halo
+  for (let i = 5; i > 0; i--) {
+    fill(200, 210, 180, i * 8);
+    ellipse(mx, my, 80 + i * 14, 80 + i * 14);
   }
-  // "GUEST LOG" label on top sheet
-  fill(13, 67, 102);
-  noStroke();
-  textAlign(CENTER, CENTER);
-  textSize(7);
-  text("GUEST LOG", cx, deskY - 14);
-  pop();
+  _drawStageRoad(true);
+  // Street lamp cones
+  _drawLamp(width * 0.25, roadY);
+  _drawLamp(width * 0.6, roadY);
+  _drawLamp(width * 0.88, roadY);
 }
 
-function drawDeskRadio(cx, deskY) {
-  push();
-  // Body
-  fill(55, 58, 62);
-  stroke(30, 32, 35);
-  strokeWeight(1);
-  rect(cx - 22, deskY - 30, 44, 30, 4);
-  // Grille
-  fill(40, 43, 47);
+function _drawLamp(x, ry) {
+  // Light cone
   noStroke();
-  rect(cx - 14, deskY - 26, 22, 16, 2);
-  stroke(70, 75, 82);
-  strokeWeight(1);
-  for (let gy = deskY - 24; gy < deskY - 12; gy += 4)
-    line(cx - 12, gy, cx + 6, gy);
-  // Red indicator light
-  fill(220, 50, 50);
-  noStroke();
-  ellipse(cx + 14, deskY - 22, 6, 6);
-  // Knob
-  fill(80, 83, 88);
-  stroke(40, 43, 47);
-  strokeWeight(1);
-  ellipse(cx + 14, deskY - 10, 10, 10);
-  fill(100, 103, 108);
-  noStroke();
-  ellipse(cx + 14, deskY - 10, 6, 6);
-  pop();
-}
-
-// ─────────────────────────────────────────────
-// Day calendar — large wall-hung poster filling the left wall
-// cx/cy is the centre of the calendar on the wall
-// ─────────────────────────────────────────────
-function drawDayCalendar(cx, bottomY) {
-  push();
-
-  let cw = width * 0.56; // fills most of left portion of wall
-  let ch = height * 0.58; // tall enough to dominate the wall
-  let cx2 = cx;
-  let cy2 = bottomY - ch; // top of calendar
-
-  // Hanging string
-  stroke(100, 80, 50);
-  strokeWeight(1.5);
-  line(cx2 - cw * 0.22, cy2, cx2 - cw * 0.22, cy2 - 16);
-  line(cx2 + cw * 0.22, cy2, cx2 + cw * 0.22, cy2 - 16);
-  // Nails
-  fill(150, 130, 100);
-  noStroke();
-  ellipse(cx2 - cw * 0.22, cy2 - 17, 6, 6);
-  ellipse(cx2 + cw * 0.22, cy2 - 17, 6, 6);
-
-  // Drop shadow
-  noStroke();
-  fill(0, 0, 0, 28);
-  rect(cx2 - cw / 2 + 7, cy2 + 7, cw, ch, 10);
-
-  // Calendar body — crisp white page
-  fill(250, 248, 242);
-  stroke(160, 140, 110);
-  strokeWeight(2);
-  rect(cx2 - cw / 2, cy2, cw, ch, 6);
-
-  // Binding rings along the top
-  fill(160, 155, 150);
-  stroke(100, 95, 90);
-  strokeWeight(1.2);
-  let ringCount = 8;
-  for (let i = 0; i < ringCount; i++) {
-    let rx = cx2 - cw / 2 + 30 + i * ((cw - 60) / (ringCount - 1));
-    ellipse(rx, cy2 + 2, 14, 18);
-    fill(80, 78, 75);
-    noStroke();
-    ellipse(rx, cy2 + 2, 7, 11);
-    fill(160, 155, 150);
-    stroke(100, 95, 90);
-    strokeWeight(1.2);
+  for (let i = 0; i < 20; i++) {
+    fill(255, 240, 180, map(i, 0, 20, 28, 0));
+    let w = i * 18;
+    triangle(x, ry - 120, x - w, ry, x + w, ry);
   }
-
-  // Top banner — navy, tall
-  fill(13, 67, 102);
-  noStroke();
-  rect(cx2 - cw / 2 + 1, cy2 + 12, cw - 2, ch * 0.18, 4, 4, 0, 0);
-
-  // Banner text
-  textFont("sans-serif");
-  textStyle(NORMAL);
-  textAlign(CENTER, CENTER);
-  fill(200, 165, 60);
-  noStroke();
-  textSize(cw * 0.038);
-  text("PAWS PARKING CO.", cx2, cy2 + 12 + ch * 0.065);
-  fill(255, 255, 255, 160);
-  textSize(cw * 0.022);
-  text("★  OFFICIAL SHIFT CALENDAR  ★", cx2, cy2 + 12 + ch * 0.135);
-
-  // Divider line
-  stroke(200, 185, 160);
-  strokeWeight(1.5);
-  line(
-    cx2 - cw / 2 + 20,
-    cy2 + 12 + ch * 0.18,
-    cx2 + cw / 2 - 20,
-    cy2 + 12 + ch * 0.18,
-  );
-
-  // "DAY" label
-  textFont("sans-serif");
-  textStyle(BOLD);
-  textAlign(CENTER, CENTER);
-  fill(13, 67, 102);
-  noStroke();
-  textSize(cw * 0.075);
-  text("DAY", cx2, cy2 + ch * 0.35);
-
-  // Giant day number
-  textFont("sans-serif");
-  textStyle(BOLD);
-  textAlign(CENTER, CENTER);
-  fill(13, 67, 102);
-  noStroke();
-  textSize(cw * 0.3);
-  text("1", cx2, cy2 + ch * 0.65);
-
-  textStyle(NORMAL);
-
-  // Subtle ruled lines at the bottom of the page
-  stroke(210, 200, 185);
-  strokeWeight(0.8);
-  for (let ry = cy2 + ch * 0.86; ry < cy2 + ch - 14; ry += 10)
-    line(cx2 - cw / 2 + 20, ry, cx2 + cw / 2 - 20, ry);
-
-  // Tear-off bottom strip
-  noStroke();
-  fill(190, 175, 150);
-  rect(cx2 - cw / 2 + 1, cy2 + ch - 10, cw - 2, 9, 0, 0, 5, 5);
-  // Perforated line above tear strip
-  stroke(160, 145, 120);
-  strokeWeight(1);
-  for (let dx = cx2 - cw / 2 + 10; dx < cx2 + cw / 2 - 10; dx += 8)
-    line(dx, cy2 + ch - 10, dx + 4, cy2 + ch - 10);
-
-  pop();
-}
-
-// ─────────────────────────────────────────────
-// Seated attendant character
-// ─────────────────────────────────────────────
-function drawSeatedAttendant(cx, floorY) {
-  push();
-
-  let headR = 28;
-  let headY = floorY - 175;
-
-  // ── Chair ──
-  // Chair back
-  fill(80, 55, 30);
-  stroke(50, 32, 12);
-  strokeWeight(1.5);
-  rect(cx - 26, headY + headR * 1.6, 52, 90, 4, 4, 0, 0);
-  // Chair seat
-  fill(100, 68, 35);
-  stroke(50, 32, 12);
-  strokeWeight(1.5);
-  rect(cx - 34, headY + headR * 3.6, 68, 18, 4);
-  // Chair legs
-  stroke(60, 38, 15);
+  // Pole
+  stroke(140, 140, 160);
   strokeWeight(3);
-  line(cx - 28, headY + headR * 3.6 + 18, cx - 32, floorY);
-  line(cx + 28, headY + headR * 3.6 + 18, cx + 32, floorY);
-  // Armrests
-  stroke(80, 52, 22);
-  strokeWeight(4);
-  line(cx - 34, headY + headR * 2.2, cx - 34, headY + headR * 3.6);
-  line(cx + 34, headY + headR * 2.2, cx + 34, headY + headR * 3.6);
-  // Chair cushion highlight
+  line(x, ry, x, ry - 120);
+  // Head
+  fill(160, 160, 180);
   noStroke();
-  fill(255, 255, 255, 18);
-  rect(cx - 32, headY + headR * 3.6, 64, 6, 3);
-
-  // ── Legs / trousers ──
-  fill(13, 67, 102);
+  rect(x - 16, ry - 128, 32, 12, 4);
+  fill(255, 245, 200);
   noStroke();
-  rect(cx - 20, headY + headR * 3.6 + 10, 18, 40, 3);
-  rect(cx + 2, headY + headR * 3.6 + 10, 18, 40, 3);
-  // Shoes
-  fill(35, 28, 20);
+  rect(x - 11, ry - 126, 22, 8, 3);
+}
+
+function _drawStageRoad(night = false) {
+  let rY = roadY,
+    rH = roadH;
   noStroke();
-  ellipse(cx - 11, floorY - 6, 24, 14);
-  ellipse(cx + 11, floorY - 6, 24, 14);
+  fill(night ? color(32, 34, 38) : color(55, 58, 62));
+  rect(0, rY, width, rH);
+  fill(night ? color(45, 100, 40) : color(80, 140, 70));
+  rect(0, rY + rH, width, height - rY - rH);
+  rect(0, rY - 12, width, 12);
+  fill(220, 200, 60);
+  rect(0, rY, width, 5);
+  rect(0, rY + rH - 5, width, 5);
+  stroke(night ? color(255, 255, 255, 120) : color(255, 255, 255, 200));
+  strokeWeight(3);
+  let lY = rY + rH / 2;
+  for (let x = 0; x < width; x += 70) line(x, lY, x + 40, lY);
+}
 
-  // ── Torso / uniform ──
-  fill(13, 67, 102);
-  stroke(8, 44, 70);
-  strokeWeight(1.2);
-  beginShape();
-  vertex(cx - headR * 1.55, headY + headR * 3.55);
-  vertex(cx + headR * 1.55, headY + headR * 3.55);
-  vertex(cx + headR * 1.15, headY + headR * 1.15);
-  vertex(cx - headR * 1.15, headY + headR * 1.15);
-  endShape(CLOSE);
+// ── Shift card ─────────────────────────────────────────────────────
+function _drawShiftCard(sh) {
+  let cW = 620,
+    cH = 340;
+  let cX = width / 2 - cW / 2;
+  let cY = height / 2 - cH / 2 - 30;
+  let isNight = sh.icon === "moon";
 
-  // Collar
-  fill(245, 245, 235);
+  // Card shadow
   noStroke();
-  triangle(
-    cx,
-    headY + headR * 0.95,
-    cx - headR * 0.5,
-    headY + headR * 1.72,
-    cx + headR * 0.5,
-    headY + headR * 1.72,
-  );
+  fill(0, 0, 0, 70);
+  rect(cX + 8, cY + 8, cW, cH, 14);
 
-  // Gold chest badge
+  // Card body
+  fill(isNight ? color(18, 22, 46) : color(248, 250, 253));
+  stroke(isNight ? color(80, 100, 180) : color(13, 67, 102));
+  strokeWeight(2.5);
+  rect(cX, cY, cW, cH, 12);
+
+  // Header bar
+  let hdrCol = isNight ? color(30, 38, 90) : color(13, 67, 102);
+  fill(hdrCol);
+  noStroke();
+  rect(cX, cY, cW, 52, 12, 12, 0, 0);
+
+  // Shift number badge
+  let badgeLabel = ["I", "II", "III"][currentShift];
   fill(200, 165, 60);
   noStroke();
-  rect(cx + headR * 0.18, headY + headR * 1.32, headR * 0.78, headR * 0.42, 2);
-  fill(13, 67, 102);
-  noStroke();
+  ellipse(cX + 38, cY + 26, 36, 36);
+  fill(isNight ? color(18, 22, 46) : color(13, 67, 102));
   textAlign(CENTER, CENTER);
-  textSize(6);
-  text("PP", cx + headR * 0.57, headY + headR * 1.54);
+  textFont("Georgia, serif");
+  textSize(16);
+  text(badgeLabel, cX + 38, cY + 27);
 
-  // ── Left arm — straight down by side ──
-  stroke(8, 44, 70);
-  strokeWeight(6);
-  line(
-    cx - headR * 1.0,
-    headY + headR * 1.3,
-    cx - headR * 1.05,
-    headY + headR * 3.4,
-  );
-  fill(255, 218, 170);
-  stroke(160, 110, 70);
-  strokeWeight(1);
-  ellipse(cx - headR * 1.06, headY + headR * 3.6, headR * 0.48, headR * 0.42);
-
-  // ── Right arm — straight down by side ──
-  stroke(8, 44, 70);
-  strokeWeight(6);
-  line(
-    cx + headR * 1.0,
-    headY + headR * 1.3,
-    cx + headR * 1.05,
-    headY + headR * 3.4,
-  );
-  fill(255, 218, 170);
-  stroke(160, 110, 70);
-  strokeWeight(1);
-  ellipse(cx + headR * 1.06, headY + headR * 3.6, headR * 0.48, headR * 0.42);
-
-  // ── Head ──
-  fill(255, 218, 170);
-  stroke(160, 110, 70);
-  strokeWeight(1.2);
-  ellipse(cx, headY, headR * 2, headR * 2.1);
-
-  // Cap dome
-  fill(13, 67, 102);
-  noStroke();
-  arc(cx, headY - headR * 0.58, headR * 1.9, headR * 1.45, PI, TWO_PI);
-
-  // Cap brim
-  fill(8, 44, 90);
-  noStroke();
-  rect(cx - headR * 1.3, headY - headR * 0.72, headR * 2.6, headR * 0.3, 2);
-
-  // Gold cap band
-  fill(200, 165, 60);
-  noStroke();
-  rect(cx - headR * 0.95, headY - headR * 0.74, headR * 1.9, headR * 0.19);
-
-  // Eyes — slightly wide, nervous look
-  fill(40, 25, 10);
-  noStroke();
-  ellipse(cx - headR * 0.32, headY - headR * 0.1, headR * 0.26, headR * 0.28);
-  ellipse(cx + headR * 0.32, headY - headR * 0.1, headR * 0.26, headR * 0.28);
-  // Whites (nervous wide eyes)
+  // Title
   fill(255);
-  noStroke();
-  ellipse(cx - headR * 0.32, headY - headR * 0.18, headR * 0.14, headR * 0.13);
-  ellipse(cx + headR * 0.32, headY - headR * 0.18, headR * 0.14, headR * 0.13);
-
-  // Sweat drop (nervous!)
-  fill(150, 200, 240);
-  stroke(100, 160, 210);
-  strokeWeight(0.8);
-  ellipse(cx + headR * 0.88, headY - headR * 0.55, 7, 10);
-  fill(200, 230, 255);
-  noStroke();
-  ellipse(cx + headR * 0.88, headY - headR * 0.62, 3, 3);
-
-  // Nervous wavy mouth
-  noFill();
-  stroke(140, 80, 50);
-  strokeWeight(1.4);
-  beginShape();
-  for (let i = 0; i <= 10; i++) {
-    let t = i / 10;
-    let mx = cx - headR * 0.28 + t * headR * 0.56;
-    let my = headY + headR * 0.28 + sin(t * PI * 2) * 2.5;
-    curveVertex(mx, my);
-  }
-  endShape();
-
-  pop();
-}
-
-// ─────────────────────────────────────────────
-// Speech bubble
-// ─────────────────────────────────────────────
-function drawSpeechBubble(tipX, tipY, message) {
-  push();
-
-  let padding = 16;
-  let bw = 230,
-    bh = 64;
-  // Bubble sits above and to the left of the tip point
-  let bx = tipX - bw + 20;
-  let by = tipY - bh - 16;
-
-  // Shadow
-  noStroke();
-  fill(0, 0, 0, 28);
-  rect(bx + 3, by + 4, bw, bh, 14);
-
-  // Bubble body
-  fill(255, 252, 240);
-  stroke(13, 67, 102);
-  strokeWeight(1.8);
-  rect(bx, by, bw, bh, 14);
-
-  // Tail pointing down-right toward attendant's head
-  fill(255, 252, 240);
-  stroke(13, 67, 102);
-  strokeWeight(1.8);
-  // Draw tail as a small triangle
-  let tailBaseX = bx + bw - 30;
-  let tailBaseY = by + bh;
-  // Erase the stroke on the base edge so it blends into the bubble
-  noStroke();
-  fill(255, 252, 240);
-  triangle(
-    tailBaseX,
-    tailBaseY - 2,
-    tailBaseX + 18,
-    tailBaseY - 2,
-    tipX + 8,
-    tipY,
-  );
-  // Re-draw the two outer edges of the tail with stroke
-  stroke(13, 67, 102);
-  strokeWeight(1.8);
-  line(tailBaseX, tailBaseY - 2, tipX + 8, tipY);
-  line(tailBaseX + 18, tailBaseY - 2, tipX + 8, tipY);
-
-  // Message text
-  fill(13, 67, 102);
-  noStroke();
   textAlign(CENTER, CENTER);
-  textSize(13);
-  text(message, bx + bw / 2, by + bh / 2 - 1);
+  textFont("Georgia, serif");
+  textSize(22);
+  text(sh.label, width / 2, cY + 27);
 
-  pop();
-}
-
-// ─────────────────────────────────────────────
-// Visual timer bar — gold pill drains across bottom
-// ─────────────────────────────────────────────
-function drawContinueHint() {
-  let alpha = stageTimer < 30 ? map(stageTimer, 0, 30, 0, 255) : 255;
-  let progress = stageTimer / stageDuration; // 0 → 1
-  let barW = 340;
-  let barH = 14;
-  let barX = width / 2 - barW / 2;
-  let barY = height - 38;
-  let fillW = barW * (1 - progress); // shrinks as time passes
-
-  push();
-
-  // Label above bar
+  // Time label
+  fill(200, 165, 60);
   textFont("sans-serif");
-  textStyle(NORMAL);
-  textAlign(CENTER, CENTER);
-  textSize(11);
-  fill(13, 67, 102, alpha * 0.75);
-  noStroke();
-  text("SHIFT STARTING", width / 2, barY - 13);
+  textSize(13);
+  text(sh.sublabel, width / 2, cY + 72);
 
-  // Track background
-  fill(13, 67, 102, alpha * 0.18);
-  stroke(13, 67, 102, alpha * 0.35);
-  strokeWeight(1.2);
-  rect(barX, barY, barW, barH, barH / 2);
-
-  // Gold fill — drains left to right
-  if (fillW > 1) {
-    noStroke();
-    fill(200, 165, 60, alpha);
-    rect(barX, barY, fillW, barH, barH / 2);
-    // Sheen on top half
-    fill(230, 200, 100, alpha * 0.45);
-    rect(barX + 2, barY + 2, max(0, fillW - 4), barH * 0.38, barH / 2);
-  }
-
-  // Track outline drawn on top
-  noFill();
-  stroke(13, 67, 102, alpha * 0.5);
-  strokeWeight(1.2);
-  rect(barX, barY, barW, barH, barH / 2);
-
-  // Subtle quarter tick marks
-  stroke(13, 67, 102, alpha * 0.28);
+  // Divider
+  stroke(isNight ? color(60, 70, 140) : color(200, 200, 220));
   strokeWeight(1);
-  for (let t of [0.25, 0.5, 0.75]) {
-    let tx = barX + barW * t;
-    line(tx, barY + 3, tx, barY + barH - 3);
+  line(cX + 30, cY + 86, cX + cW - 30, cY + 86);
+
+  // ── Timer info block ──
+  let timerLabel = sh.timerSeconds === Infinity ? "∞" : sh.timerSeconds + "s";
+  noStroke();
+  fill(isNight ? color(40, 50, 100) : color(235, 242, 252));
+  rect(cX + 30, cY + 100, cW - 60, 70, 8);
+
+  fill(isNight ? color(150, 170, 255) : color(13, 67, 102));
+  textAlign(CENTER, CENTER);
+  textFont("Georgia, serif");
+  textSize(38);
+  text(timerLabel, width / 2 - 80, cY + 136);
+
+  stroke(isNight ? color(60, 75, 150) : color(180, 195, 220));
+  strokeWeight(1);
+  line(width / 2 - 20, cY + 108, width / 2 - 20, cY + 162);
+
+  noStroke();
+  fill(isNight ? color(140, 155, 220) : color(60, 80, 120));
+  textAlign(LEFT, CENTER);
+  textFont("sans-serif");
+  textSize(13);
+  text("per guest\ntime limit", width / 2 - 10, cY + 136);
+
+  // ── Flavour text ──
+  fill(isNight ? color(160, 170, 220) : color(60, 80, 120));
+  textAlign(CENTER, CENTER);
+  textFont("sans-serif");
+  textSize(14);
+  text(sh.ambientDesc, width / 2, cY + 210);
+
+  // ── Shift icon (big, decorative) ──
+  _drawShiftIcon(sh.icon, cX + cW - 72, cY + 150, 44, isNight);
+
+  // ── Auto-start countdown bar ──
+  let elapsed = millis() - stageAutoStartMs;
+  let progress = constrain(1 - elapsed / STAGE_HOLD_MS, 0, 1);
+  let secsLeft = ceil((STAGE_HOLD_MS - elapsed) / 1000);
+
+  let barX = cX + 30,
+    barY = cY + cH - 46,
+    barW = cW - 60,
+    barH = 10;
+
+  // Track
+  noStroke();
+  fill(isNight ? color(40, 50, 100) : color(210, 220, 235));
+  rect(barX, barY, barW, barH, 5);
+
+  // Fill — pulses slightly as last second arrives
+  let pulse = secsLeft === 1 ? 0.82 + sin(frameCount * 0.25) * 0.18 : 1.0;
+  let fillCol = isNight
+    ? color(120, 145, 230, 255 * pulse)
+    : color(13, 67, 102, 255 * pulse);
+  fill(fillCol);
+  rect(barX, barY, barW * progress, barH, 5);
+
+  // Gold leading edge glow
+  if (progress > 0.02) {
+    noStroke();
+    fill(200, 165, 60, 180 * pulse);
+    ellipse(barX + barW * progress, barY + barH / 2, 14, 14);
   }
 
+  // "Starting in N…" label
+  noStroke();
+  fill(isNight ? color(160, 170, 220) : color(80, 100, 140));
+  textAlign(CENTER, CENTER);
+  textFont("sans-serif");
+  textSize(12);
+  text("Starting in  " + secsLeft + "…", width / 2, barY - 14);
+}
+
+function _drawShiftIcon(type, cx, cy, r, isNight) {
+  push();
+  if (type === "sunrise") {
+    // Half-sun rising from a line
+    fill(255, 220, 50);
+    noStroke();
+    arc(cx, cy + 10, r * 2, r * 2, PI, TWO_PI);
+    stroke(255, 200, 50, 180);
+    strokeWeight(2);
+    for (let a = PI + PI / 8; a < TWO_PI - PI / 8; a += PI / 5) {
+      line(
+        cx + cos(a) * (r + 4),
+        cy + 10 + sin(a) * (r + 4),
+        cx + cos(a) * (r + 16),
+        cy + 10 + sin(a) * (r + 16),
+      );
+    }
+    stroke(255, 200, 50, 100);
+    strokeWeight(2);
+    line(cx - r - 12, cy + 10, cx + r + 12, cy + 10);
+  } else if (type === "sun") {
+    fill(255, 230, 60);
+    noStroke();
+    ellipse(cx, cy, r * 2, r * 2);
+    stroke(255, 210, 50, 160);
+    strokeWeight(2);
+    for (let a = 0; a < TWO_PI; a += PI / 6) {
+      line(
+        cx + cos(a) * (r + 3),
+        cy + sin(a) * (r + 3),
+        cx + cos(a) * (r + 14),
+        cy + sin(a) * (r + 14),
+      );
+    }
+  } else {
+    // Moon crescent
+    fill(240, 240, 210);
+    noStroke();
+    ellipse(cx, cy, r * 2, r * 2);
+    fill(isNight ? color(18, 22, 46) : color(248, 250, 253));
+    noStroke();
+    ellipse(cx + r * 0.5, cy - r * 0.1, r * 1.7, r * 1.7);
+    // Stars nearby
+    fill(220, 225, 255, 200);
+    noStroke();
+    ellipse(cx + r + 8, cy - r + 2, 4, 4);
+    ellipse(cx + r + 18, cy - r + 14, 3, 3);
+    ellipse(cx + r + 5, cy - r + 22, 3.5, 3.5);
+  }
   pop();
+}
+
+// ── Click handling for stage screen ───────────────────────────────
+// Stage screen auto-advances — no click needed, but keep the hook in case
+// sketch.js calls it.
+function handleStageClick() {
+  // intentionally empty — auto-advance is handled in drawStageScreen()
 }
