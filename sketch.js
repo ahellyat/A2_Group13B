@@ -2,6 +2,7 @@ let clickHistory = [];
 let disabled = [false, false, false, false, false];
 let submissions = [];
 let triedToOpenGateWithoutSubmission = false;
+let triedToSubmitDuplicatePattern = false;
 let wrongCount = 0;
 let isMatch;
 let gameOver = false;
@@ -22,12 +23,14 @@ let lightningTimer = 0;
 let lightningFlash = false;
 let thunderbolts = [];
 
+// ── Manual book state ──────────────────────────────────────────────
+let showManual = false;
+let manualPage = 0; // 0 = guest log pages
+
 // ── In-game clock ──────────────────────────────────────────────────
-// Tracks fictional time of day in minutes from midnight
-// Morning starts 06:00 (360 min), afternoon 12:00 (720), night 18:00 (1080)
-const SHIFT_START_MINUTES = [360, 720, 1080]; // 06:00, 12:00, 18:00
-const SHIFT_MINUTES_PER_GUEST = [60, 30, 15]; // how many in-game minutes each served guest advances the clock
-let gameClockMinutes = 360; // current in-game time in minutes from midnight
+const SHIFT_START_MINUTES = [360, 720, 1080];
+const SHIFT_MINUTES_PER_GUEST = [60, 30, 15];
+let gameClockMinutes = 360;
 
 function initGameClock() {
   gameClockMinutes = SHIFT_START_MINUTES[currentShift];
@@ -35,7 +38,6 @@ function initGameClock() {
 
 function tickGameClock() {
   gameClockMinutes += SHIFT_MINUTES_PER_GUEST[currentShift];
-  // Cap at 23:59 (1439) so the clock doesn't wrap weirdly
   if (gameClockMinutes > 1439) gameClockMinutes = 1439;
 }
 
@@ -43,14 +45,11 @@ function drawGameClock() {
   let sh = getCurrentShift();
   let isNight = sh.id === "night";
 
-  // Position: top-right, just below the past-customers legend
   let cx = width - 52,
     cy = 100,
     r = 34;
 
   push();
-
-  // Panel background
   noStroke();
   fill(0, 0, 0, 40);
   ellipse(cx + 3, cy + 4, (r + 14) * 2, (r + 14) * 2);
@@ -60,13 +59,11 @@ function drawGameClock() {
   strokeWeight(1.5);
   ellipse(cx, cy, (r + 14) * 2, (r + 14) * 2);
 
-  // Clock face
   fill(isNight ? color(8, 12, 38) : color(240, 248, 255));
   stroke(200, 165, 60, 120);
   strokeWeight(1);
   ellipse(cx, cy, r * 2, r * 2);
 
-  // Hour markers
   for (let i = 0; i < 12; i++) {
     let a = map(i, 0, 12, -HALF_PI, -HALF_PI + TWO_PI);
     let isMajor = i % 3 === 0;
@@ -82,29 +79,24 @@ function drawGameClock() {
     );
   }
 
-  // Clock hands
   let totalMinutes = gameClockMinutes;
   let h = totalMinutes / 60;
   let m = totalMinutes % 60;
 
-  // Hour hand
   let hAngle = map(h % 12, 0, 12, -HALF_PI, -HALF_PI + TWO_PI);
   stroke(isNight ? color(200, 210, 255) : color(13, 67, 102));
   strokeWeight(3);
   line(cx, cy, cx + cos(hAngle) * (r * 0.55), cy + sin(hAngle) * (r * 0.55));
 
-  // Minute hand
   let mAngle = map(m, 0, 60, -HALF_PI, -HALF_PI + TWO_PI);
   stroke(isNight ? color(180, 195, 255) : color(40, 90, 160));
   strokeWeight(2);
   line(cx, cy, cx + cos(mAngle) * (r * 0.8), cy + sin(mAngle) * (r * 0.8));
 
-  // Centre dot
   fill(200, 165, 60);
   noStroke();
   ellipse(cx, cy, 6, 6);
 
-  // Digital readout below
   let hh = floor(h) % 24;
   let mm = floor(m);
   let ampm = hh >= 12 ? "PM" : "AM";
@@ -125,15 +117,14 @@ function drawGameClock() {
 }
 
 // ── Shift / timer system ───────────────────────────────────────────
-let shiftTimerSeconds = 60; // current timer value (counts down)
-let shiftTimerMax = 60; // max for the current shift
-let shiftTimerActive = false; // only ticks while car is waiting & player has started clicking
-let timerStarted = false; // has the player clicked anything this turn?
-let timerExpired = false; // did the timer run out?
+let shiftTimerSeconds = 60;
+let shiftTimerMax = 60;
+let shiftTimerActive = false;
+let timerStarted = false;
+let timerExpired = false;
 let lastFrameTime = 0;
-let shiftGuestsCompleted = 0; // how many non-training guests done this shift
+let shiftGuestsCompleted = 0;
 
-// Training guests — first 2 get no timer
 const TRAINING_GUESTS = 2;
 
 // ── Car animation ──
@@ -239,7 +230,6 @@ function draw() {
 
 // ── Timer tick ─────────────────────────────────────────────────────
 function tickTimer() {
-  // No timer for training guests
   if (submissions.length < TRAINING_GUESTS) return;
   if (!shiftTimerActive || timerExpired) return;
 
@@ -251,7 +241,6 @@ function tickTimer() {
 
   if (shiftTimerSeconds <= 0 && !timerExpired) {
     timerExpired = true;
-    // Auto-submit a wrong answer — penalise the player
     _handleTimerExpiry();
   }
 }
@@ -268,7 +257,6 @@ function _handleTimerExpiry() {
     return;
   }
 
-  // Check if shift should advance
   _checkShiftAdvance();
 
   clickHistory = [];
@@ -278,14 +266,11 @@ function _handleTimerExpiry() {
 
 function _checkShiftAdvance() {
   let sh = getCurrentShift();
-  // Night shift never ends naturally
   if (sh.id === "night") return;
   if (shiftGuestsCompleted >= sh.guestCount) {
-    // Advance to next shift after car exits
     shiftGuestsCompleted = 0;
     if (currentShift < SHIFTS.length - 1) {
       currentShift++;
-      // Stage screen will fire after car exits — set a flag
       pendingShiftTransition = true;
     }
   }
@@ -293,13 +278,18 @@ function _checkShiftAdvance() {
 
 let pendingShiftTransition = false;
 
-function startTimerIfNeeded() {
+// ── Auto-start timer when car arrives ─────────────────────────────
+function autoStartTimer() {
   if (submissions.length < TRAINING_GUESTS) return;
-  if (!timerStarted && carState === "waiting") {
-    timerStarted = true;
-    shiftTimerActive = true;
-    lastFrameTime = millis();
-  }
+  if (timerStarted) return;
+  timerStarted = true;
+  shiftTimerActive = true;
+  lastFrameTime = millis();
+}
+
+// Kept for compatibility but no longer used to gate the timer
+function startTimerIfNeeded() {
+  autoStartTimer();
 }
 
 function updateCarAnim() {
@@ -308,9 +298,10 @@ function updateCarAnim() {
     if (abs(carAnimX - carStopX) < 0.8) {
       carAnimX = carStopX;
       carState = "waiting";
-      // Reset timer for new guest
+      // Reset timer, then immediately auto-start for non-training guests
       resetShiftTimer();
       lastFrameTime = millis();
+      autoStartTimer();
     }
   }
 
@@ -330,7 +321,6 @@ function updateCarAnim() {
       carState = "entering";
       refreshFrozenCar();
 
-      // Fire shift transition if needed
       if (pendingShiftTransition) {
         pendingShiftTransition = false;
         gameState = "stage";
@@ -352,7 +342,6 @@ function drawWeather() {
     drawRain(1.0);
     drawThunder();
   }
-  // wrongCount === 0 → do nothing
 }
 
 function drawCloudy() {
@@ -463,15 +452,12 @@ function drawThunder() {
   }
 }
 
-// ── Night-shift sky overlay ────────────────────────────────────────
 function drawNightOverlay() {
   let sh = getCurrentShift();
   if (sh.id !== "night") return;
-  // Dark vignette tint
   noStroke();
   fill(8, 12, 35, 160);
   rect(0, 0, width, height);
-  // Stars scattered above road
   randomSeed(42);
   fill(220, 225, 255);
   for (let i = 0; i < 80; i++) {
@@ -483,7 +469,6 @@ function drawNightOverlay() {
     noStroke();
     ellipse(sx, sy, sr * 2, sr * 2);
   }
-  // Moon
   let mx = width - 160,
     my = 70;
   fill(240, 240, 210, 220);
@@ -496,7 +481,6 @@ function drawNightOverlay() {
     fill(200, 210, 180, i * 7);
     ellipse(mx, my, 70 + i * 12, 70 + i * 12);
   }
-  // Street lamps
   _nightLamp(width * 0.15, roadY);
   _nightLamp(width * 0.45, roadY);
   _nightLamp(width * 0.78, roadY);
@@ -512,7 +496,6 @@ function _nightLamp(x, ry) {
   fill(255, 245, 200, 200);
   noStroke();
   rect(x - 10, ry - 116, 20, 7, 3);
-  // Cone
   for (let i = 0; i < 16; i++) {
     fill(255, 240, 180, map(i, 0, 16, 22, 0));
     let w = i * 14;
@@ -520,15 +503,12 @@ function _nightLamp(x, ry) {
   }
 }
 
-// Ambient sky helpers for in-game (drawn before weather clouds)
 function _drawMorningSky() {
-  // Horizon warm glow
   noStroke();
   for (let i = 0; i < 30; i++) {
     fill(255, 140, 50, map(i, 0, 30, 60, 0));
     ellipse(width / 2, roadY, width * 1.1 + i * 20, 120 + i * 8);
   }
-  // Rising sun behind everything
   let sunX = width * 0.15,
     sunY = roadY - 60;
   noStroke();
@@ -573,16 +553,13 @@ function _drawAfternoonSun() {
 }
 
 function runGame() {
-  // Sky colour — blends shift base colour with weather darkening
   let sh = getCurrentShift();
 
-  // Base sky per shift (clear-weather)
   let clearSky;
   if (sh.id === "morning") clearSky = color(255, 210, 140);
   else if (sh.id === "afternoon") clearSky = color(130, 195, 245);
   else clearSky = color(18, 22, 48);
 
-  // Weather darkening overlay
   let stormSky = color(72, 82, 98);
   let stormAmt = constrain(wrongCount / 3, 0, 1);
   let skyColor = lerpColor(clearSky, stormSky, stormAmt);
@@ -595,7 +572,6 @@ function runGame() {
     return;
   }
 
-  // Shift-specific ambient sky (drawn before weather clouds)
   if (sh.id === "morning" && wrongCount === 0) _drawMorningSky();
   else if (sh.id === "afternoon") _drawAfternoonSun();
   else if (sh.id === "night") drawNightOverlay();
@@ -631,17 +607,23 @@ function runGame() {
       frozenGuestLabel,
     );
 
-    // Draw timer and clock (only after training)
     if (submissions.length >= TRAINING_GUESTS) {
       drawShiftTimer();
       drawShiftBadge();
       drawGameClock();
     }
+
+    // Draw the manual book button (always visible during play)
+    drawManualButton();
   }
 
   drawFog();
   if (timerExpired && carState === "waiting") drawTimerExpiredOverlay();
+
+  // Draw manual on top of everything except modal
+  if (showManual) drawManual();
   if (showModal) drawModal();
+
   displayCompletion();
 }
 
@@ -658,7 +640,6 @@ function drawShiftTimer() {
 
   push();
 
-  // Panel background
   noStroke();
   fill(0, 0, 0, 50);
   rect(x + 3, y + 4, w, h, 10);
@@ -670,7 +651,6 @@ function drawShiftTimer() {
   strokeWeight(1.5);
   rect(x, y, w, h, 10);
 
-  // Header
   noStroke();
   fill(200, 165, 60, 220);
   rect(x + 1, y + 1, w - 2, 22, 9, 9, 0, 0);
@@ -680,7 +660,6 @@ function drawShiftTimer() {
   textSize(9);
   text("TIME", x + w / 2, y + 12);
 
-  // Timer value
   let ratio = shiftTimerSeconds / shiftTimerMax;
   let urgent = ratio < 0.3;
   let timerCol = timerExpired
@@ -689,13 +668,11 @@ function drawShiftTimer() {
       ? color(255, 140, 0)
       : color(255, 255, 255);
 
-  // Arc background track
   noFill();
   stroke(255, 255, 255, 30);
   strokeWeight(7);
   arc(x + w / 2, y + 74, 48, 48, -HALF_PI, -HALF_PI + TWO_PI);
 
-  // Arc fill
   if (!timerExpired && ratio > 0) {
     stroke(timerCol);
     strokeWeight(7);
@@ -703,7 +680,6 @@ function drawShiftTimer() {
     arc(x + w / 2, y + 74, 48, 48, -HALF_PI, -HALF_PI + TWO_PI * ratio);
   }
 
-  // Pulse ring when urgent
   if (urgent && !timerExpired) {
     let pulse = sin(frameCount * 0.2) * 0.5 + 0.5;
     noFill();
@@ -712,7 +688,6 @@ function drawShiftTimer() {
     ellipse(x + w / 2, y + 74, 58, 58);
   }
 
-  // Seconds text
   noStroke();
   fill(timerCol);
   textAlign(CENTER, CENTER);
@@ -720,16 +695,11 @@ function drawShiftTimer() {
   textSize(timerExpired ? 13 : 22);
   if (timerExpired) {
     text("TIME\nOUT", x + w / 2, y + 74);
-  } else if (!timerStarted && carState === "waiting") {
-    fill(255, 255, 255, 140);
-    textFont("sans-serif");
-    textSize(10);
-    text("click to\nstart", x + w / 2, y + 74);
   } else {
+    // Auto-started — always show the countdown number
     text(ceil(shiftTimerSeconds), x + w / 2, y + 74);
   }
 
-  // "seconds" label
   if (!timerExpired) {
     noStroke();
     fill(200, 165, 60, 180);
@@ -739,7 +709,6 @@ function drawShiftTimer() {
     text("seconds", x + w / 2, y + 104);
   }
 
-  // Shift indicator dots at bottom
   let dotY = y + h - 18;
   for (let i = 0; i < SHIFTS.length; i++) {
     let filled = i <= currentShift;
@@ -758,7 +727,7 @@ function drawShiftTimer() {
   pop();
 }
 
-// ── Shift badge (top-left of screen) ──────────────────────────────
+// ── Shift badge ────────────────────────────────────────────────────
 function drawShiftBadge() {
   let sh = getCurrentShift();
   let names = ["Morning", "Afternoon", "Night"];
@@ -799,6 +768,384 @@ function drawTimerExpiredOverlay() {
   pop();
 }
 
+// ── Manual book button ─────────────────────────────────────────────
+let manualBtnX, manualBtnY, manualBtnW, manualBtnH;
+
+function drawManualButton() {
+  let bw = 52,
+    bh = 52;
+  let bx = width / 2 - 570 - bw / 2; // left of the bottom panel
+  let by = height - 550 - bh - 10;
+
+  manualBtnX = bx;
+  manualBtnY = by;
+  manualBtnW = bw;
+  manualBtnH = bh;
+
+  let hov =
+    mouseX >= bx && mouseX <= bx + bw && mouseY >= by && mouseY <= by + bh;
+
+  push();
+  noStroke();
+  fill(0, 0, 0, 40);
+  rect(bx + 3, by + 4, bw, bh, 10);
+
+  fill(hov ? color(247, 247, 205) : color(240, 248, 255));
+  stroke(13, 67, 102);
+  strokeWeight(1.8);
+  rect(bx, by, bw, bh, 10);
+
+  // Book icon
+  let cx = bx + bw / 2,
+    cy = by + bh / 2;
+  // Book body
+  fill(160, 100, 50);
+  stroke(80, 40, 10);
+  strokeWeight(1.2);
+  rect(cx - 14, cy - 16, 28, 32, 2);
+  // Spine
+  fill(120, 70, 30);
+  noStroke();
+  rect(cx - 14, cy - 16, 5, 32, 2, 0, 0, 2);
+  // Pages
+  fill(250, 248, 240);
+  noStroke();
+  rect(cx - 8, cy - 14, 20, 28);
+  // Lines on pages
+  stroke(180, 170, 150);
+  strokeWeight(0.8);
+  for (let ly = cy - 9; ly <= cy + 10; ly += 5) {
+    line(cx - 5, ly, cx + 10, ly);
+  }
+  // Small "?" or bookmark
+  fill(200, 165, 60);
+  noStroke();
+  rect(cx + 6, cy - 18, 5, 10, 0, 0, 3, 3);
+
+  pop();
+}
+
+// ── Manual book overlay ────────────────────────────────────────────
+// Stores per-guest records: { guestNum, shape, sequence: [optionIndex,...], animal }
+let guestLog = []; // populated on each submission
+
+function recordGuestLog(guestNum, shape, sequence, animal) {
+  guestLog.push({ guestNum, shape, sequence: [...sequence], animal });
+}
+
+function drawManual() {
+  let mw = 740,
+    mh = 500;
+  let mx = width / 2 - mw / 2,
+    my = height / 2 - mh / 2;
+
+  push();
+
+  // Dim backdrop
+  noStroke();
+  fill(0, 0, 0, 170);
+  rect(0, 0, width, height);
+
+  // ── Book shape ──────────────────────────────────────────────
+  // Drop shadow
+  fill(30, 18, 8, 80);
+  noStroke();
+  rect(mx + 8, my + 10, mw, mh, 10);
+
+  // Back cover / spine
+  fill(90, 52, 20);
+  stroke(50, 28, 8);
+  strokeWeight(2);
+  rect(mx, my, mw, mh, 8);
+
+  // Spine strip
+  fill(70, 38, 12);
+  noStroke();
+  rect(mx, my, 28, mh, 8, 0, 0, 8);
+
+  // Gold spine lines
+  stroke(200, 165, 60, 160);
+  strokeWeight(1.5);
+  line(mx + 28, my + 12, mx + 28, my + mh - 12);
+  line(mx + 24, my + 12, mx + 24, my + mh - 12);
+
+  // Page area
+  fill(252, 248, 238);
+  noStroke();
+  rect(mx + 28, my + 4, mw - 32, mh - 8, 4);
+
+  // Subtle page texture lines
+  stroke(220, 210, 190, 60);
+  strokeWeight(0.5);
+  for (let ly = my + 30; ly < my + mh - 10; ly += 22) {
+    line(mx + 32, ly, mx + mw - 6, ly);
+  }
+
+  // ── Header ──────────────────────────────────────────────────
+  fill(13, 67, 102);
+  noStroke();
+  rect(mx + 28, my + 4, mw - 32, 46, 4, 4, 0, 0);
+
+  fill(200, 165, 60);
+  textAlign(LEFT, CENTER);
+  textFont("Georgia, serif");
+  textSize(11);
+  text("PAWS PARKING AUTHORITY", mx + 48, my + 16);
+
+  fill(255);
+  textAlign(CENTER, CENTER);
+  textFont("Georgia, serif");
+  textSize(19);
+  text("★  Guest Service Log  ★", mx + 28 + (mw - 36) / 2, my + 36);
+
+  // ── Content area ────────────────────────────────────────────
+  let contentX = mx + 38;
+  let contentY = my + 62;
+  let contentW = mw - 52;
+  let contentH = mh - 110;
+
+  // Column headers
+  fill(13, 67, 102, 180);
+  noStroke();
+  rect(contentX, contentY, contentW, 22, 3);
+
+  fill(255);
+  textFont("sans-serif");
+  textSize(10);
+  textAlign(LEFT, CENTER);
+  text("GUEST", contentX + 8, contentY + 11);
+  text("BADGE", contentX + 80, contentY + 11);
+  text("RITUAL SEQUENCE  (order performed)", contentX + 150, contentY + 11);
+
+  // Entries
+  if (guestLog.length === 0) {
+    fill(120, 100, 70);
+    textAlign(CENTER, CENTER);
+    textFont("Georgia, serif");
+    textSize(14);
+    text(
+      "No guests served yet.",
+      mx + 28 + (mw - 36) / 2,
+      contentY + contentH / 2,
+    );
+  } else {
+    let rowH = 56;
+    let maxVisible = floor((contentH - 26) / rowH);
+    // Show in chronological order (oldest first); if list is longer than fits,
+    // show the most recent maxVisible entries so the latest is always visible.
+    let entries =
+      guestLog.length > maxVisible
+        ? guestLog.slice(guestLog.length - maxVisible)
+        : guestLog;
+
+    for (let i = 0; i < entries.length; i++) {
+      let e = entries[i];
+      let ry = contentY + 26 + i * rowH;
+
+      // Alternating row tint
+      if (i % 2 === 0) {
+        fill(230, 220, 200, 50);
+        noStroke();
+        rect(contentX, ry, contentW, rowH - 2, 2);
+      }
+
+      // Guest number
+      fill(40, 30, 10);
+      textFont("Georgia, serif");
+      textSize(13);
+      textAlign(LEFT, CENTER);
+      text("#" + e.guestNum, contentX + 8, ry + rowH / 2);
+
+      // Badge shape
+      _drawManualBadge(e.shape, contentX + 80, ry + rowH / 2);
+
+      // Sequence icons
+      _drawManualSequence(e.sequence, contentX + 150, ry + rowH / 2);
+
+      // Divider
+      stroke(200, 185, 160, 80);
+      strokeWeight(0.8);
+      line(contentX, ry + rowH - 1, contentX + contentW, ry + rowH - 1);
+    }
+
+    if (guestLog.length > maxVisible) {
+      fill(120, 100, 70);
+      noStroke();
+      textFont("sans-serif");
+      textSize(10);
+      textAlign(RIGHT, CENTER);
+      text(
+        "Showing latest " + maxVisible + " of " + guestLog.length + " guests",
+        contentX + contentW,
+        contentY + 14,
+      );
+    }
+  }
+
+  // ── Legend at bottom ────────────────────────────────────────
+  let legY = my + mh - 46;
+  fill(240, 232, 215);
+  noStroke();
+  rect(mx + 30, legY, mw - 36, 38, 0, 0, 4, 4);
+
+  stroke(200, 185, 160, 100);
+  strokeWeight(0.8);
+  line(mx + 30, legY, mx + mw - 6, legY);
+
+  fill(80, 60, 30);
+  textFont("sans-serif");
+  textSize(9);
+  textAlign(LEFT, CENTER);
+  text("ICON KEY:", mx + 40, legY + 10);
+
+  let legendIcons = [
+    { icon: "ticket", label: "Check Ticket" },
+    { icon: "plate", label: "Check License" },
+    { icon: "pen", label: "Click Pen" },
+    { icon: "stamp", label: "Stamp Log" },
+    { icon: "speaker", label: "Talk Speaker" },
+  ];
+  let legX = mx + 100;
+  for (let li of legendIcons) {
+    _drawTinyIcon(li.icon, legX + 14, legY + 10, 1.0);
+    fill(60, 45, 20);
+    noStroke();
+    textFont("sans-serif");
+    textSize(8);
+    textAlign(CENTER, CENTER);
+    text(li.label, legX + 14, legY + 28);
+    legX += 110;
+  }
+
+  // ── Close hint ──────────────────────────────────────────────
+  fill(120, 95, 55, 180);
+  noStroke();
+  textFont("sans-serif");
+  textSize(10);
+  textAlign(CENTER, CENTER);
+  text("Click outside to close", mx + 28 + (mw - 36) / 2, my + mh - 12);
+
+  pop();
+}
+
+// Draw a small badge shape for the manual
+function _drawManualBadge(shape, cx, cy) {
+  push();
+  let sz = 18;
+  if (shape === "square") {
+    fill(40, 120, 220);
+    stroke(255);
+    strokeWeight(1.2);
+    rect(cx - sz / 2, cy - sz / 2, sz, sz, 2);
+    fill(255);
+    noStroke();
+    rect(cx - sz / 2 + 2, cy - sz / 2 + 2, sz - 4, sz - 4, 1);
+    fill(40, 120, 220);
+    noStroke();
+    rect(cx - sz / 2 + 4, cy - sz / 2 + 4, sz - 8, sz - 8, 1);
+  } else if (shape === "triangle") {
+    fill(220, 60, 60);
+    stroke(255);
+    strokeWeight(1.2);
+    let h = sz * 0.866;
+    triangle(cx, cy - h / 2, cx - sz / 2, cy + h / 2, cx + sz / 2, cy + h / 2);
+  } else {
+    // none badge — dash
+    stroke(160, 160, 160);
+    strokeWeight(2.5);
+    noFill();
+    line(cx - 10, cy, cx + 10, cy);
+    fill(130, 130, 130);
+    noStroke();
+    textFont("sans-serif");
+    textSize(8);
+    textAlign(CENTER, CENTER);
+    text("free", cx, cy + 10);
+  }
+  pop();
+}
+
+// Draw the sequence of mini icons for one guest entry
+function _drawManualSequence(seq, startX, cy) {
+  push();
+  let iconNames = ["ticket", "plate", "pen", "stamp", "speaker"];
+  let spacing = 58;
+  for (let i = 0; i < seq.length; i++) {
+    let ix = startX + i * spacing;
+    // Order bubble sits above the icon
+    fill(13, 67, 102);
+    noStroke();
+    ellipse(ix + 16, cy - 14, 14, 14);
+    fill(255);
+    textFont("sans-serif");
+    textSize(8);
+    textAlign(CENTER, CENTER);
+    text(i + 1, ix + 16, cy - 14);
+
+    // Arrow between icons (drawn at mid-height between bubble and icon)
+    if (i < seq.length - 1) {
+      stroke(160, 145, 120);
+      strokeWeight(1);
+      line(ix + 34, cy - 2, ix + spacing - 4, cy - 2);
+      fill(160, 145, 120);
+      noStroke();
+      triangle(
+        ix + spacing,
+        cy - 2,
+        ix + spacing - 6,
+        cy - 5,
+        ix + spacing - 6,
+        cy + 1,
+      );
+    }
+
+    // Tiny icon centred at cy + 4 within the row
+    let optionIdx = seq[i] - 1; // clickHistory stores 1-based values
+    if (optionIdx >= 0 && optionIdx < iconNames.length) {
+      _drawTinyIcon(iconNames[optionIdx], ix + 16, cy + 4, 1.0);
+    }
+  }
+
+  if (seq.length === 0) {
+    fill(160, 130, 90);
+    noStroke();
+    textFont("sans-serif");
+    textSize(10);
+    textAlign(LEFT, CENTER);
+    text("(timed out — no actions)", startX, cy);
+  }
+  pop();
+}
+
+// Scaled-down icon renderer for the manual.
+// drawMenuIcon draws icons spanning roughly ±22px from its cx/cy.
+// We use drawingContext save/restore to isolate the raw canvas transform
+// and avoid the p5 scale() / variable name collision.
+function _drawTinyIcon(type, cx, cy, scaleFactor) {
+  let s = scaleFactor * 0.58;
+  drawingContext.save();
+  drawingContext.translate(cx, cy);
+  drawingContext.scale(s, s);
+  drawMenuIcon(type, 0, 0, false, 255);
+  drawingContext.restore();
+}
+
+// ── Manual click handling ──────────────────────────────────────────
+function handleManualClick() {
+  let mw = 740,
+    mh = 500;
+  let mx = width / 2 - mw / 2,
+    my = height / 2 - mh / 2;
+
+  // Close if the click landed outside the book card
+  let insideBook =
+    mouseX >= mx && mouseX <= mx + mw && mouseY >= my && mouseY <= my + mh;
+  if (!insideBook) {
+    showManual = false;
+  }
+  return true; // always consume the click
+}
+
 function mousePressed() {
   if (gameState === "start") {
     handleStartClick();
@@ -811,22 +1158,31 @@ function mousePressed() {
   if (gameOver) return;
   if (carState !== "waiting") return;
 
+  // Manual takes priority
+  if (showManual) {
+    handleManualClick();
+    return;
+  }
+
+  // Manual button
+  if (
+    mouseX >= manualBtnX &&
+    mouseX <= manualBtnX + manualBtnW &&
+    mouseY >= manualBtnY &&
+    mouseY <= manualBtnY + manualBtnH
+  ) {
+    showManual = true;
+    return;
+  }
+
   if (showModal) {
     modalMouseClicked();
     return;
   }
 
   modalMouseClicked();
-
-  // Start timer on first interaction
-  if (!timerStarted && submissions.length >= TRAINING_GUESTS) {
-    startTimerIfNeeded();
-  }
-
+  triedToSubmitDuplicatePattern = false;
   bottomMenuMouseClicked();
-
-  // Also start timer when a menu button is clicked
-  startTimerIfNeeded();
 
   // Submit button
   let submitSize = 100,
@@ -844,11 +1200,40 @@ function mousePressed() {
       return;
     }
     triedToOpenGateWithoutSubmission = false;
-    shiftTimerActive = false; // stop timer
+    triedToSubmitDuplicatePattern = false;
+
+    // Block duplicate-ritual submissions:
+    // • Free-choice guests can't use either established ritual
+    // • Training guest 2 can't reuse ritual 1's sequence
+    if (submissions.length >= 1) {
+      let seqMatchesRitual = (ritual) =>
+        ritual &&
+        ritual.length === clickHistory.length &&
+        ritual.every((v, i) => v === clickHistory[i]);
+      let isDupe =
+        (submissions.length >= 2 &&
+          frozenShape === "none" &&
+          (seqMatchesRitual(submissions[0]) ||
+            seqMatchesRitual(submissions[1]))) ||
+        (submissions.length === 1 && seqMatchesRitual(submissions[0]));
+      if (isDupe) {
+        triedToSubmitDuplicatePattern = true;
+        return;
+      }
+    }
+
+    shiftTimerActive = false;
     timerExpired = false;
+
+    let currentGuestNum = submissions.length + 1;
+    let currentShape = frozenShape;
+    let currentAnimal = frozenAnimalName;
 
     guestIndex++;
     submissions.push([...clickHistory]);
+
+    // Record to guest log
+    recordGuestLog(currentGuestNum, currentShape, clickHistory, currentAnimal);
 
     if (submissions.length === 1) {
       showFeedbackShape = true;
@@ -889,6 +1274,7 @@ function mousePressed() {
 
     clickHistory = [];
     disabled = [false, false, false, false, false];
+    triedToSubmitDuplicatePattern = false;
     tickGameClock();
     carState = "raising";
   }

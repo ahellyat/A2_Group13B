@@ -19,39 +19,156 @@ function drawRoad() {
   pop();
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// drawMessage — first-person attendant narration bubble
+//
+// Priority order (highest first):
+//  1. Car not yet stopped — nothing to say
+//  2. Timer expired — overlay handles it; keep quiet
+//  3. Tried to open gate with no actions selected
+//  4. Tried to submit a duplicate ritual on a free-choice guest
+//  5. Training guest 1 (square) — explain the ritual concept
+//  6. Training guest 2 (triangle) — ask for a different order
+//  7. Actions in progress — tell player how many they've chosen so far
+//  8. No actions yet on a post-training guest — tell player what to do
+// ─────────────────────────────────────────────────────────────────────────────
 function drawMessage() {
+  if (typeof carState !== "undefined" && carState !== "waiting") return;
+
   let message = "";
-  let yPos = height / 8;
-  let sh = typeof getCurrentShift === "function" ? getCurrentShift() : null;
+  let isTraining = submissions.length < TRAINING_GUESTS;
 
+  // ── 3. Gate pressed with empty sequence ──────────────────────────
   if (triedToOpenGateWithoutSubmission) {
-    message = "I can't let anyone in yet! I didn't do the steps I need to do.";
-  } else if (submissions.length < 1) {
     message =
-      "Looks like my first guest is here. My manager said I have to choose the right order of doing things.";
-  } else if (submissions.length === 1) {
-    message =
-      "That felt like the right routine to handle guests with square licenses. How about the triangle ones?\nLet me decide a new order.";
-  } else if (submissions.length === 2 && sh && sh.id === "morning") {
-    message =
-      "Morning shift — I have a whole minute per guest. Let me stay sharp!";
-  } else if (submissions.length > 1 && wrongCount === 0) {
-    message =
-      "Looks like there's a couple more guests waiting to get in. Let me do the right routine for each of them.";
-  } else if (submissions.length > 1 && wrongCount > 0 && !isMatch) {
-    message =
-      "Oh no. That felt wrong. I have to make sure I'm serving them properly.\nLet me try doing the right shape routine again";
-  } else if (submissions.length > 1 && wrongCount > 0 && isMatch) {
-    message =
-      "Phew! I'm setting things right. Now my guests will be happy again!\nLet's keep going.";
-  }
+      "I can't open the gate yet — I haven't done anything!\nI need to perform all 5 actions first.";
 
-  // Shift-specific pressure messages
-  if (sh) {
-    if (submissions.length >= 2 && sh.id === "afternoon" && message === "") {
-      message = "Afternoon rush — only 30 seconds per guest. Stay focused!";
-    } else if (submissions.length >= 2 && sh.id === "night" && message === "") {
-      message = "Night shift... it never ends. 15 seconds. Don't slip up.";
+    // ── 4. Duplicate ritual on free-choice guest ─────────────────────
+  } else if (
+    typeof triedToSubmitDuplicatePattern !== "undefined" &&
+    triedToSubmitDuplicatePattern
+  ) {
+    message =
+      "That order is already one of my rituals.\nFree guests need a fresh sequence — I'll try a different one.";
+
+    // ── 5. Training guest 1 (square badge) ───────────────────────────
+  } else if (submissions.length === 0) {
+    if (clickHistory.length === 0) {
+      message =
+        "My first guest! I can process them however I like.\nThe order I choose will become my Square Ritual — so I'll make it memorable.";
+    } else {
+      message =
+        "Good start. I've selected " +
+        clickHistory.length +
+        " of 5 actions.\nFinish the sequence, then open the gate.";
+    }
+
+    // ── 6. Training guest 2 (triangle badge) ─────────────────────────
+  } else if (submissions.length === 1) {
+    if (clickHistory.length === 0) {
+      message =
+        "Second guest — triangle badge. I need to choose a completely different order from my Square Ritual.\nThis sequence will become my Triangle Ritual.";
+    } else {
+      let dupWarning = _sequenceMatchesRitual1()
+        ? "  ⚠ This matches my Square Ritual — I must change it!"
+        : "";
+      message =
+        clickHistory.length +
+        " of 5 actions chosen." +
+        dupWarning +
+        "\nFinish up, then open the gate.";
+    }
+
+    // ── 7 & 8. Post-training guests ──────────────────────────────────
+  } else {
+    let guestShapeIndex = submissions.length - 2;
+    let guestShape = shapeArray[guestShapeIndex % shapeArray.length];
+
+    if (clickHistory.length === 0) {
+      // ── No actions yet — what does this guest need? ────────────────
+      if (wrongCount > 0 && typeof isMatch !== "undefined" && !isMatch) {
+        // Last guest was wrong — remind and redirect
+        if (guestShape === "square") {
+          message =
+            "I got the last one wrong and the weather is turning.\nSquare badge — I need to reproduce my Square Ritual exactly.";
+        } else if (guestShape === "triangle") {
+          message =
+            "I got the last one wrong and the weather is turning.\nTriangle badge — I need to reproduce my Triangle Ritual exactly.";
+        } else {
+          message =
+            "I got the last one wrong and the weather is turning.\nNo badge on this one — any order works, just not one of my rituals.";
+        }
+      } else if (wrongCount > 0 && typeof isMatch !== "undefined" && isMatch) {
+        // Just corrected after a wrong streak
+        if (guestShape === "square") {
+          message =
+            "Back on track! This guest has a square badge.\nTime to run through my Square Ritual again.";
+        } else if (guestShape === "triangle") {
+          message =
+            "Back on track! Triangle badge.\nLet me recall my Triangle Ritual and do it in the right order.";
+        } else {
+          message = "Back on track! No badge — any original sequence will do.";
+        }
+      } else {
+        // Clean state — straightforward prompt
+        if (guestShape === "square") {
+          message =
+            "Square badge. I know this one — reproduce my Square Ritual in the exact same order.";
+        } else if (guestShape === "triangle") {
+          message =
+            "Triangle badge. Run through my Triangle Ritual — same order as I set it.";
+        } else {
+          message =
+            "No badge — free choice. I can pick any order, as long as it's not one of my two established rituals.";
+        }
+      }
+    } else {
+      // ── Actions in progress ────────────────────────────────────────
+      let done = clickHistory.length;
+      let remaining = 5 - done;
+      if (guestShape === "square") {
+        let onTrack = _sequenceOnTrackForRitual(submissions[0]);
+        if (!onTrack && done > 0) {
+          message =
+            done +
+            " of 5 — this doesn't match my Square Ritual so far. I should start over.";
+        } else {
+          message =
+            done +
+            " of 5 actions done. " +
+            remaining +
+            " left — keep going with my Square Ritual.";
+        }
+      } else if (guestShape === "triangle") {
+        let onTrack = _sequenceOnTrackForRitual(submissions[1]);
+        if (!onTrack && done > 0) {
+          message =
+            done +
+            " of 5 — this doesn't match my Triangle Ritual so far. I should start over.";
+        } else {
+          message =
+            done +
+            " of 5 actions done. " +
+            remaining +
+            " left — keep going with my Triangle Ritual.";
+        }
+      } else {
+        // Free choice — warn if accidentally matching a ritual
+        let matchingRitual = _currentlyMatchingRitual();
+        if (matchingRitual) {
+          message =
+            done +
+            " of 5 — this is matching my " +
+            matchingRitual +
+            " Ritual!\nI need to go in a different order for free guests.";
+        } else {
+          message =
+            done +
+            " of 5 actions. " +
+            remaining +
+            " to go — any original order works.";
+        }
+      }
     }
   }
 
@@ -62,7 +179,9 @@ function drawMessage() {
   textSize(16);
   let padding = 10,
     maxWidth = width * 0.7;
-  let textBoxHeight = textLeading() * message.split("\n").length + 20;
+  let lines = message.split("\n");
+  let textBoxHeight = textLeading() * lines.length + 20;
+  let yPos = height / 8;
   rectMode(CENTER);
   noStroke();
   fill(247, 247, 205);
@@ -71,6 +190,34 @@ function drawMessage() {
   fill(13, 67, 102);
   text(message, width / 2, yPos, maxWidth - 40);
   pop();
+}
+
+// ── Helpers for in-progress sequence matching ─────────────────────
+
+// True if the current clickHistory is a prefix of the given ritual
+function _sequenceOnTrackForRitual(ritual) {
+  if (!ritual || ritual.length === 0) return true;
+  for (let i = 0; i < clickHistory.length; i++) {
+    if (clickHistory[i] !== ritual[i]) return false;
+  }
+  return true;
+}
+
+// Returns "Square" or "Triangle" if the in-progress clickHistory
+// is a prefix of (or fully matches) that ritual; null otherwise.
+function _currentlyMatchingRitual() {
+  if (submissions.length < 2) return null;
+  if (_sequenceOnTrackForRitual(submissions[0])) return "Square";
+  if (_sequenceOnTrackForRitual(submissions[1])) return "Triangle";
+  return null;
+}
+
+// True if current clickHistory matches ritual 1 exactly (used during training)
+function _sequenceMatchesRitual1() {
+  if (submissions.length < 1) return false;
+  let r = submissions[0];
+  if (r.length !== clickHistory.length) return false;
+  return r.every((v, i) => v === clickHistory[i]);
 }
 
 function submitButton() {

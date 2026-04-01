@@ -29,7 +29,7 @@ const SHIFTS = [
     id: "night",
     label: "NIGHT SHIFT",
     sublabel: "18:00 – ???",
-    timerSeconds: 1,
+    timerSeconds: 10,
     guestCount: Infinity, // endless until game over
     skyTop: [18, 22, 48],
     skyBot: [35, 42, 78],
