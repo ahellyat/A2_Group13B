@@ -28,19 +28,19 @@ function drawMessage() {
     message = "I can't let anyone in yet! I didn't do the steps I need to do.";
   } else if (submissions.length < 1) {
     message =
-      "Looks like my first guest is here. My manager said I have to choose the right order of doing things.";
+      "My first guest is here. I need to follow the correct ritual order — check the Guidebook if I forget!";
   } else if (submissions.length === 1) {
     message =
-      "That felt like the right routine to handle guests with square licenses. How about the triangle ones?\nLet me decide a new order.";
+      "One down. Remember: each car badge tells me which ritual to use. Square = Ritual 1, Triangle = Ritual 2.";
   } else if (submissions.length === 2 && sh && sh.id === "morning") {
     message =
-      "Morning shift — I have a whole minute per guest. Let me stay sharp!";
+      "Morning shift — 45 seconds per guest. Take a breath and follow the ritual carefully.";
   } else if (submissions.length > 1 && wrongCount === 0) {
     message =
-      "Looks like there's a couple more guests waiting to get in. Let me do the right routine for each of them.";
+      "Looks like there's more guests waiting. Let me do the right routine for each of them.";
   } else if (submissions.length > 1 && wrongCount > 0 && !isMatch) {
     message =
-      "Oh no. That felt wrong. I have to make sure I'm serving them properly.\nLet me try doing the right shape routine again";
+      "Oh no. That felt wrong. Check the Guidebook and make sure I'm following the correct order!";
   } else if (submissions.length > 1 && wrongCount > 0 && isMatch) {
     message =
       "Phew! I'm setting things right. Now my guests will be happy again!\nLet's keep going.";
@@ -48,10 +48,10 @@ function drawMessage() {
 
   // Shift-specific pressure messages
   if (sh) {
-    if (submissions.length >= 2 && sh.id === "afternoon" && message === "") {
+    if (submissions.length >= 1 && sh.id === "afternoon" && message === "") {
       message = "Afternoon rush — only 30 seconds per guest. Stay focused!";
-    } else if (submissions.length >= 2 && sh.id === "night" && message === "") {
-      message = "Night shift... it never ends. 15 seconds. Don't slip up.";
+    } else if (submissions.length >= 1 && sh.id === "night" && message === "") {
+      message = "Night shift... 20 seconds per guest. Don't slip up.";
     }
   }
 
@@ -497,21 +497,33 @@ function drawCar(carX, carColor, shape, animalName, guestLabel) {
   arc(wBX, bBot + 2, wR * 2 + 12, wR * 2 + 12, PI * 0.85, PI * 1.0);
   if (shape !== "none") {
     let size = 44;
+    // White badge background
     fill(255);
     stroke(0);
     strokeWeight(2);
+    rect(carX - size / 2 - 3, bodyCenterY - size / 2 - 3, size + 6, size + 6, 5);
+    // Coloured shape inside badge
+    let sc = typeof SHAPE_COLORS !== "undefined" ? SHAPE_COLORS[shape] : null;
+    if (sc) fill(sc[0], sc[1], sc[2]);
+    else fill(100, 110, 130);
+    noStroke();
     if (shape === "square") {
       rect(carX - size / 2, bodyCenterY - size / 2, size, size, 3);
-    } else {
+    } else if (shape === "triangle") {
       let h = size * 0.866;
       triangle(
-        carX,
-        bodyCenterY - h / 2,
-        carX - size / 2,
-        bodyCenterY + h / 2,
-        carX + size / 2,
-        bodyCenterY + h / 2,
+        carX, bodyCenterY - h / 2,
+        carX - size / 2, bodyCenterY + h / 2,
+        carX + size / 2, bodyCenterY + h / 2,
       );
+    } else if (shape === "circle") {
+      ellipse(carX, bodyCenterY, size, size);
+    } else if (shape === "diamond") {
+      let hd = size / 2;
+      quad(carX,        bodyCenterY - hd,
+           carX + hd,   bodyCenterY,
+           carX,        bodyCenterY + hd,
+           carX - hd,   bodyCenterY);
     }
   }
   pop();
@@ -665,93 +677,89 @@ function drawTicketBooth(gateAngle) {
 // ─────────────────────────────────────────────
 function drawPastCustomers() {
   if (submissions.length === 0) return;
-  let sz = 22,
-    pad = 12,
-    barY = 28;
+  let sz = 22, pad = 12, barY = 28;
   let startX = width / 2 - (submissions.length * (sz + pad)) / 2;
-  let col1 = color(40, 120, 220),
-    col2 = color(220, 60, 60),
-    colN = color(180, 180, 180);
+
+  let col1 = color(40,  120, 220);
+  let col2 = color(220,  60,  60);
+  let col3 = color(220, 130,  30);
+  let col4 = color(140,  50, 200);
+  let colN = color(180, 180, 180);
 
   push();
+
+  // ── Legend (top-right) ──
+  let lx = width - 168, ly = 8;
+  noStroke();
+
+  // Square
+  fill(col1); rect(lx, ly,      10, 10, 2);
+  fill(60);   textAlign(LEFT, TOP); textSize(10); text("— ritual 1", lx + 14, ly);
+  // Triangle
+  fill(col2); triangle(lx+5, ly+16, lx, ly+26, lx+10, ly+26);
+  fill(60);   text("— ritual 2", lx + 14, ly + 16);
+  // Circle
+  fill(col3); ellipse(lx + 5, ly + 37, 10, 10);
+  fill(60);   text("— ritual 3", lx + 14, ly + 32);
+  // Diamond
+  fill(col4); quad(lx+5, ly+46, lx+10, ly+51, lx+5, ly+56, lx, ly+51);
+  fill(60);   text("— ritual 4", lx + 14, ly + 48);
+  // None
+  stroke(140); strokeWeight(1.5);
+  line(lx, ly + 68, lx + 10, ly + 68);
+  noStroke();
+  fill(60);   text("— anything", lx + 14, ly + 64);
+
+  // ── Past customer shapes ──
   noStroke();
   fill(13, 67, 102, 160);
   textAlign(RIGHT, CENTER);
   textSize(11);
   text("past customers", startX - 10, barY);
-  let lx = width - 160,
-    ly = 12;
-  textAlign(LEFT, TOP);
-  textSize(10);
-  fill(col1);
-  rect(lx, ly, 10, 10, 2);
-  fill(60);
-  text("— ritual 1", lx + 14, ly);
-  fill(col2);
-  rect(lx, ly + 16, 10, 10, 2);
-  fill(60);
-  text("— ritual 2", lx + 14, ly + 16);
-  stroke(140);
-  strokeWeight(1.5);
-  line(lx, ly + 38, lx + 10, ly + 38);
-  noStroke();
-  fill(60);
-  text("— anything", lx + 14, ly + 32);
 
   for (let i = 0; i < submissions.length; i++) {
     let x = startX + i * (sz + pad) + sz / 2;
-    let shapeType, col;
-    if (i === 0) {
-      shapeType = "square";
-      col = col1;
-    } else if (i === 1) {
-      shapeType = "triangle";
-      col = col2;
-    } else {
-      let shapeIndex = i - 2;
-      shapeType = shapeArray[shapeIndex % shapeArray.length];
-      col =
-        shapeType === "square" ? col1 : shapeType === "triangle" ? col2 : colN;
-    }
+    let shapeType = shapeArray[i % shapeArray.length];
+    let col =
+      shapeType === "square"   ? col1 :
+      shapeType === "triangle" ? col2 :
+      shapeType === "circle"   ? col3 :
+      shapeType === "diamond"  ? col4 : colN;
+
     if (shapeType !== "none") {
+      // Shadow
       noStroke();
       fill(0, 0, 0, 30);
-      if (shapeType === "square")
-        rect(x - sz / 2 + 2, barY - sz / 2 + 2, sz, sz, 3);
-      else {
-        let h = sz * 0.866;
-        triangle(
-          x + 2,
-          barY - h / 2 + 2,
-          x - sz / 2 + 2,
-          barY + h / 2 + 2,
-          x + sz / 2 + 2,
-          barY + h / 2 + 2,
-        );
-      }
+      _drawPastShape(shapeType, x + 2, barY + 2, sz);
     }
+
     fill(col);
     stroke(0);
     strokeWeight(1.2);
-    if (shapeType === "square") rect(x - sz / 2, barY - sz / 2, sz, sz, 3);
-    else if (shapeType === "triangle") {
-      let h = sz * 0.866;
-      triangle(
-        x,
-        barY - h / 2,
-        x - sz / 2,
-        barY + h / 2,
-        x + sz / 2,
-        barY + h / 2,
-      );
-    } else {
+    if (shapeType === "none") {
       stroke(colN);
       strokeWeight(2.5);
       noFill();
       line(x - sz / 2, barY, x + sz / 2, barY);
+    } else {
+      _drawPastShape(shapeType, x, barY, sz);
     }
   }
   pop();
+}
+
+function _drawPastShape(shapeType, x, y, sz) {
+  if (shapeType === "square") {
+    rect(x - sz / 2, y - sz / 2, sz, sz, 3);
+  } else if (shapeType === "triangle") {
+    let h = sz * 0.866;
+    triangle(x, y - h / 2, x - sz / 2, y + h / 2, x + sz / 2, y + h / 2);
+  } else if (shapeType === "circle") {
+    ellipse(x, y, sz, sz);
+  } else if (shapeType === "diamond") {
+    let hd = sz / 2;
+    quad(x, y - hd, x + hd, y, x, y + hd, x - hd, y);
+  }
 }
 
 function displayCurrentGuest(
@@ -929,16 +937,16 @@ function drawFog() {
 
 function displayCompletion() {
   let sh = typeof getCurrentShift === "function" ? getCurrentShift() : null;
-  // Night shift is infinite — never shows a completion screen
-  if (sh && sh.id === "night") return;
+  if (!sh) return;
+  // Night completion is handled by the gameWon flag/drawGameWon() in sketch.js
+  if (sh.id === "night") return;
 
-  // Morning or afternoon: completion after their guest count
-  if (sh && sh.id === "morning" && submissions.length >= 5) {
+  if (sh.id === "morning" && submissions.length >= 6) {
     _drawCompletionCard(
       "Morning Shift Complete!",
       "Heading into the afternoon...",
     );
-  } else if (sh && sh.id === "afternoon" && submissions.length >= 8) {
+  } else if (sh.id === "afternoon" && submissions.length >= 14) {
     _drawCompletionCard("Afternoon Shift Done!", "Night shift awaits...");
   }
 }

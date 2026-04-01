@@ -1,3 +1,10 @@
+// ── Preset ritual sequences ─────────────────────────────────────────
+// 1=Check Ticket  2=Check License  3=Click Pen  4=Stamp Guest Log  5=Talk Into Speaker
+const RITUAL_SQUARE   = [1, 3, 5, 2, 4]; // Check Ticket → Click Pen → Talk Into Speaker → Check License → Stamp Guest Log
+const RITUAL_TRIANGLE = [4, 2, 1, 5, 3]; // Stamp Guest Log → Check License → Check Ticket → Talk Into Speaker → Click Pen
+const RITUAL_CIRCLE   = [2, 5, 3, 1, 4]; // Check License → Talk Into Speaker → Click Pen → Check Ticket → Stamp Guest Log
+const RITUAL_DIAMOND  = [5, 1, 4, 3, 2]; // Talk Into Speaker → Check Ticket → Stamp Guest Log → Click Pen → Check License
+
 let clickHistory = [];
 let disabled = [false, false, false, false, false];
 let submissions = [];
@@ -5,7 +12,41 @@ let triedToOpenGateWithoutSubmission = false;
 let wrongCount = 0;
 let isMatch;
 let gameOver = false;
-let shapeArray = ["square", "square", "triangle", "triangle", "none", "none"];
+let showGuidebook = false;
+let gameWon = false;
+// Shape colours — used by car badge, past-customers bar, and guidebook
+const SHAPE_COLORS = {
+  square:   [40,  120, 220],
+  triangle: [220,  60,  60],
+  circle:   [220, 130,  30],
+  diamond:  [140,  50, 200],
+};
+
+let guidebookPage = 1; // 1 or 2
+
+// shapeArray drives what badge each car shows.
+// Morning: only square / triangle / none
+// Afternoon & Night: all four shapes + none
+let shapeArray = [];
+
+function buildShapeArrayForShift(shiftId) {
+  let pool;
+  if (shiftId === "morning") {
+    pool = ["square","square","square","triangle","triangle","triangle","none","none"];
+  } else {
+    pool = [
+      "square","square","triangle","triangle",
+      "circle","circle","diamond","diamond",
+      "none","none"
+    ];
+  }
+  // Fisher-Yates shuffle
+  for (let i = pool.length - 1; i > 0; i--) {
+    let j = floor(random(i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  shapeArray = pool;
+}
 let showModal = false;
 let modalX, modalY, modalW, modalH;
 let closeX, closeY, closeW, closeH;
@@ -133,8 +174,8 @@ let timerExpired = false; // did the timer run out?
 let lastFrameTime = 0;
 let shiftGuestsCompleted = 0; // how many non-training guests done this shift
 
-// Training guests — first 2 get no timer
-const TRAINING_GUESTS = 2;
+// No training guests — rituals are preset, timer starts from guest 1
+const TRAINING_GUESTS = 0;
 
 // ── Car animation ──
 let frozenShape = "square";
@@ -166,10 +207,7 @@ function setup() {
   carStopX = width * 0.54;
   carAnimX = -200;
 
-  for (let i = shapeArray.length - 1; i > 0; i--) {
-    let j = floor(random(i + 1));
-    [shapeArray[i], shapeArray[j]] = [shapeArray[j], shapeArray[i]];
-  }
+  buildShapeArrayForShift("morning");
 
   modalW = 600;
   modalH = 400;
@@ -197,34 +235,14 @@ function setup() {
 
 function refreshFrozenCar() {
   let animalList = [
-    "dog",
-    "cat",
-    "bear",
-    "fox",
-    "rabbit",
-    "dog",
-    "cat",
-    "bear",
+    "dog", "cat", "bear", "fox", "rabbit", "dog", "cat", "bear",
   ];
-  if (submissions.length === 0) {
-    frozenShape = "square";
-    frozenCarColor = color(40, 120, 220);
-    frozenGuestLabel = "Guest #1: Doug";
-    frozenAnimalName = animalList[0];
-  } else if (submissions.length === 1) {
-    frozenShape = "triangle";
-    frozenCarColor = color(220, 60, 60);
-    frozenGuestLabel = "Guest #2: Kitty";
-    frozenAnimalName = animalList[1];
-  } else {
-    let shapeIndex = submissions.length - 2;
-    frozenShape = shapeArray[shapeIndex % shapeArray.length];
-    if (frozenShape === "square") frozenCarColor = color(40, 120, 220);
-    else if (frozenShape === "triangle") frozenCarColor = color(220, 60, 60);
-    else frozenCarColor = color(100, 110, 130);
-    frozenGuestLabel = "Guest #" + (submissions.length + 1);
-    frozenAnimalName = animalList[submissions.length % animalList.length];
-  }
+  let shapeIndex = submissions.length % shapeArray.length;
+  frozenShape = shapeArray[shapeIndex];
+  let sc = SHAPE_COLORS[frozenShape];
+  frozenCarColor = sc ? color(sc[0], sc[1], sc[2]) : color(100, 110, 130);
+  frozenGuestLabel = "Guest #" + (submissions.length + 1);
+  frozenAnimalName = animalList[submissions.length % animalList.length];
 }
 
 function draw() {
@@ -278,14 +296,17 @@ function _handleTimerExpiry() {
 
 function _checkShiftAdvance() {
   let sh = getCurrentShift();
-  // Night shift never ends naturally
-  if (sh.id === "night") return;
+  // Night shift: 100 cars completed = game won
+  if (sh.id === "night") {
+    if (shiftGuestsCompleted >= sh.guestCount) {
+      gameWon = true;
+    }
+    return;
+  }
   if (shiftGuestsCompleted >= sh.guestCount) {
-    // Advance to next shift after car exits
     shiftGuestsCompleted = 0;
     if (currentShift < SHIFTS.length - 1) {
       currentShift++;
-      // Stage screen will fire after car exits — set a flag
       pendingShiftTransition = true;
     }
   }
@@ -308,9 +329,10 @@ function updateCarAnim() {
     if (abs(carAnimX - carStopX) < 0.8) {
       carAnimX = carStopX;
       carState = "waiting";
-      // Reset timer for new guest
       resetShiftTimer();
       lastFrameTime = millis();
+      // Timer starts automatically as soon as the car arrives
+      startTimerIfNeeded();
     }
   }
 
@@ -338,6 +360,8 @@ function updateCarAnim() {
         stageAnimFrame = 0;
         stageFadeAlpha = 255;
         initGameClock();
+        buildShapeArrayForShift(getCurrentShift().id);
+        shiftGuestsCompleted = 0;
       }
     }
   }
@@ -641,7 +665,10 @@ function runGame() {
 
   drawFog();
   if (timerExpired && carState === "waiting") drawTimerExpiredOverlay();
+  drawGuidebookButton();
   if (showModal) drawModal();
+  if (showGuidebook) drawGuidebook();
+  if (gameWon) drawGameWon();
   displayCompletion();
 }
 
@@ -720,11 +747,6 @@ function drawShiftTimer() {
   textSize(timerExpired ? 13 : 22);
   if (timerExpired) {
     text("TIME\nOUT", x + w / 2, y + 74);
-  } else if (!timerStarted && carState === "waiting") {
-    fill(255, 255, 255, 140);
-    textFont("sans-serif");
-    textSize(10);
-    text("click to\nstart", x + w / 2, y + 74);
   } else {
     text(ceil(shiftTimerSeconds), x + w / 2, y + 74);
   }
@@ -734,7 +756,7 @@ function drawShiftTimer() {
     noStroke();
     fill(200, 165, 60, 180);
     textFont("sans-serif");
-    textSize(8);
+    textSize(11);
     textAlign(CENTER, CENTER);
     text("seconds", x + w / 2, y + 104);
   }
@@ -808,7 +830,59 @@ function mousePressed() {
     handleStageClick();
     return;
   }
-  if (gameOver) return;
+  if (gameOver || gameWon) return;
+
+  // ── Guidebook button (always checked first during play) ──
+  let gbX = 15, gbY = height - 195, gbW = 80, gbH = 80;
+  if (mouseX >= gbX && mouseX <= gbX + gbW && mouseY >= gbY && mouseY <= gbY + gbH) {
+    if (!showGuidebook) {
+      showGuidebook = true;
+      guidebookPage = 1;
+      // Start the timer if not already running
+      startTimerIfNeeded();
+      // Deduct 5 seconds from the current car's timer
+      if (timerStarted) {
+        shiftTimerSeconds = max(0, shiftTimerSeconds - 5);
+      }
+    }
+    return;
+  }
+
+  // ── Guidebook close / page navigation ──
+  if (showGuidebook) {
+    let pW = 600, pH = 520;
+    let pX = width / 2 - pW / 2, pY = height / 2 - pH / 2;
+    let sh2 = getCurrentShift();
+    let isAfternoonOrNight = sh2 && (sh2.id === "afternoon" || sh2.id === "night");
+    let navY = pY + pH - 54;
+    let navBtnW = 110, navBtnH = 36;
+
+    // Prev button (page 2 → 1)
+    if (isAfternoonOrNight && guidebookPage > 1) {
+      let bx = pX + 20;
+      if (mouseX >= bx && mouseX <= bx + navBtnW && mouseY >= navY && mouseY <= navY + navBtnH) {
+        guidebookPage = 1;
+        return;
+      }
+    }
+    // Next button (page 1 → 2)
+    if (isAfternoonOrNight && guidebookPage < 2) {
+      let bx = pX + pW - navBtnW - 20;
+      if (mouseX >= bx && mouseX <= bx + navBtnW && mouseY >= navY && mouseY <= navY + navBtnH) {
+        guidebookPage = 2;
+        return;
+      }
+    }
+
+    // Close button
+    let cbW = 170, cbH = 40;
+    let cbX = width / 2 - cbW / 2, cbY = pY + pH - cbH - 8;
+    if (mouseX >= cbX && mouseX <= cbX + cbW && mouseY >= cbY && mouseY <= cbY + cbH) {
+      showGuidebook = false;
+    }
+    return; // block all game clicks while guidebook is open
+  }
+
   if (carState !== "waiting") return;
 
   if (showModal) {
@@ -850,41 +924,35 @@ function mousePressed() {
     guestIndex++;
     submissions.push([...clickHistory]);
 
-    if (submissions.length === 1) {
-      showFeedbackShape = true;
-      feedbackShapeType = "square";
-      feedbackShapeTimer = 180;
-    } else if (submissions.length === 2) {
-      showFeedbackShape = true;
-      feedbackShapeType = "triangle";
-      feedbackShapeTimer = 180;
-    } else if (submissions.length >= 3) {
-      let highlightedIndex = submissions.length - 3;
-      let guestShape = shapeArray[highlightedIndex % shapeArray.length];
+    // Every guest is checked against the preset rituals
+    let guestShapeIndex = submissions.length - 1;
+    let guestShape = shapeArray[guestShapeIndex % shapeArray.length];
 
-      if (guestShape === "none") {
-        isMatch = true;
-      } else {
-        let patternToMatch =
-          guestShape === "triangle" ? submissions[1] : submissions[0];
-        isMatch =
-          patternToMatch.length === clickHistory.length &&
-          patternToMatch.every((val, idx) => val === clickHistory[idx]);
-      }
+    if (guestShape === "none") {
+      isMatch = true;
+    } else {
+      let patternToMatch =
+        guestShape === "square"   ? RITUAL_SQUARE   :
+        guestShape === "triangle" ? RITUAL_TRIANGLE :
+        guestShape === "circle"   ? RITUAL_CIRCLE   :
+                                    RITUAL_DIAMOND;
+      isMatch =
+        patternToMatch.length === clickHistory.length &&
+        patternToMatch.every((val, idx) => val === clickHistory[idx]);
+    }
 
-      if (!isMatch) {
-        wrongCount++;
-        if (wrongCount >= 4) {
-          gameOver = true;
-        }
-      } else if (wrongCount > 0) {
-        wrongCount = max(0, wrongCount - 1);
+    if (!isMatch) {
+      wrongCount++;
+      if (wrongCount >= 4) {
+        gameOver = true;
       }
+    } else if (wrongCount > 0) {
+      wrongCount = max(0, wrongCount - 1);
+    }
 
-      if (!gameOver) {
-        shiftGuestsCompleted++;
-        _checkShiftAdvance();
-      }
+    if (!gameOver) {
+      shiftGuestsCompleted++;
+      _checkShiftAdvance();
     }
 
     clickHistory = [];
@@ -1009,4 +1077,306 @@ function drawFeedbackShape() {
     cy + sz * 0.75,
   );
   pop();
+}
+
+// ── Guidebook button (bottom-left, outside booth panel) ────────────
+function drawGuidebookButton() {
+  let bX = 15, bY = height - 195, bW = 80, bH = 80;
+  let hov = !showGuidebook &&
+            mouseX >= bX && mouseX <= bX + bW &&
+            mouseY >= bY && mouseY <= bY + bH;
+
+  push();
+  noStroke();
+  fill(0, 0, 0, 40);
+  rect(bX + 3, bY + 4, bW, bH, 10);
+
+  fill(showGuidebook ? color(200, 165, 60) : hov ? color(247, 247, 205) : color(240, 248, 255));
+  stroke(13, 67, 102);
+  strokeWeight(2);
+  rect(bX, bY, bW, bH, 10);
+
+  // Book cover
+  noStroke();
+  fill(13, 67, 102);
+  rect(bX + 14, bY + 10, 52, 42, 4);
+  // Pages (left)
+  fill(255, 252, 240);
+  rect(bX + 18, bY + 14, 22, 34, 2);
+  // Pages (right)
+  rect(bX + 42, bY + 14, 20, 34, 2);
+  // Spine
+  fill(8, 44, 70);
+  noStroke();
+  rect(bX + 38, bY + 12, 6, 38, 1);
+  // Ruled lines on pages
+  stroke(13, 67, 102, 80);
+  strokeWeight(1);
+  for (let i = 0; i < 3; i++) {
+    line(bX + 20, bY + 22 + i * 8, bX + 38, bY + 22 + i * 8);
+    line(bX + 44, bY + 22 + i * 8, bX + 60, bY + 22 + i * 8);
+  }
+
+  // Label
+  noStroke();
+  fill(13, 67, 102);
+  textAlign(CENTER, CENTER);
+  textFont("sans-serif");
+  textSize(9);
+  text("GUIDEBOOK", bX + bW / 2, bY + bH - 10);
+  pop();
+}
+
+// ── Guidebook overlay panel (2 pages) ─────────────────────────────
+function drawGuidebook() {
+  let sh = getCurrentShift();
+  let isNight = sh && sh.id === "night";
+  let isAfternoonOrNight = sh && (sh.id === "afternoon" || sh.id === "night");
+  let optLabels = ["Check Ticket", "Check License", "Click Pen", "Stamp Guest Log", "Talk Into Speaker"];
+
+  push();
+  noStroke();
+  fill(0, 0, 0, 165);
+  rect(0, 0, width, height);
+
+  let pW = 600, pH = 520;
+  let pX = width / 2 - pW / 2, pY = height / 2 - pH / 2;
+
+  // Drop shadow
+  fill(0, 0, 0, 60);
+  noStroke();
+  rect(pX + 7, pY + 7, pW, pH, 12);
+
+  // Panel body
+  fill(isNight ? color(18, 22, 46) : color(248, 250, 253));
+  stroke(isNight ? color(80, 100, 180) : color(13, 67, 102));
+  strokeWeight(2);
+  rect(pX, pY, pW, pH, 10);
+
+  // Header bar
+  fill(isNight ? color(30, 38, 90) : color(13, 67, 102));
+  noStroke();
+  rect(pX, pY, pW, 50, 10, 10, 0, 0);
+
+  fill(255);
+  textAlign(CENTER, CENTER);
+  textFont("Georgia, serif");
+  textSize(20);
+  text("Guidebook", width / 2, pY + 26);
+
+  // Page indicator in header
+  if (isAfternoonOrNight) {
+    fill(200, 165, 60, 200);
+    textFont("sans-serif");
+    textSize(11);
+    textAlign(RIGHT, CENTER);
+    text("Page " + guidebookPage + " / 2", pX + pW - 16, pY + 26);
+  }
+
+  // Penalty note
+  noStroke();
+  fill(isNight ? color(160, 170, 220) : color(120, 140, 180));
+  textFont("sans-serif");
+  textSize(11);
+  textAlign(CENTER, CENTER);
+  text("Each use costs 5 seconds from your current timer", width / 2, pY + 62);
+
+  // Divider under subheader
+  stroke(isNight ? color(60, 70, 140) : color(200, 210, 230));
+  strokeWeight(1);
+  line(pX + 24, pY + 74, pX + pW - 24, pY + 74);
+
+  // ── Draw one ritual column ──────────────────────────────────────
+  function drawRitualColumn(ritual, colX, badgeShape, accentArr) {
+    let ac = color(accentArr[0], accentArr[1], accentArr[2]);
+    let colY = pY + 86;
+
+    // Badge icon
+    let badgeSz = 28;
+    if (badgeShape === "square") {
+      fill(ac);
+      stroke(isNight ? color(200, 220, 255) : color(13, 67, 102));
+      strokeWeight(1.5);
+      rect(colX, colY, badgeSz, badgeSz, 4);
+    } else if (badgeShape === "triangle") {
+      let th = badgeSz * 0.866;
+      fill(ac);
+      stroke(isNight ? color(255, 180, 180) : color(13, 67, 102));
+      strokeWeight(1.5);
+      triangle(colX + badgeSz / 2, colY, colX, colY + th, colX + badgeSz, colY + th);
+    } else if (badgeShape === "circle") {
+      fill(ac);
+      stroke(isNight ? color(255, 200, 140) : color(13, 67, 102));
+      strokeWeight(1.5);
+      ellipse(colX + badgeSz / 2, colY + badgeSz / 2, badgeSz, badgeSz);
+    } else if (badgeShape === "diamond") {
+      fill(ac);
+      stroke(isNight ? color(220, 180, 255) : color(13, 67, 102));
+      strokeWeight(1.5);
+      let hd = badgeSz / 2;
+      quad(colX + hd, colY,
+           colX + badgeSz, colY + hd,
+           colX + hd, colY + badgeSz,
+           colX, colY + hd);
+    }
+
+    // Column title
+    noStroke();
+    fill(isNight ? color(220, 230, 255) : color(13, 67, 102));
+    textAlign(LEFT, CENTER);
+    textFont("sans-serif");
+    textStyle(BOLD);
+    textSize(14);
+    let titleMap = {square:"Square Ritual", triangle:"Triangle Ritual",
+                    circle:"Circle Ritual", diamond:"Diamond Ritual"};
+    text(titleMap[badgeShape], colX + 36, colY + 14);
+    textStyle(NORMAL);
+
+    // Steps
+    for (let i = 0; i < ritual.length; i++) {
+      let sy = colY + 50 + i * 54;
+
+      // Connector line
+      if (i > 0) {
+        stroke(accentArr[0], accentArr[1], accentArr[2], 100);
+        strokeWeight(1.5);
+        line(colX + 14, sy - 18, colX + 14, sy);
+      }
+
+      // Step circle
+      noStroke();
+      fill(ac);
+      ellipse(colX + 14, sy + 13, 26, 26);
+      fill(255);
+      textAlign(CENTER, CENTER);
+      textFont("Georgia, serif");
+      textSize(13);
+      text(i + 1, colX + 14, sy + 14);
+
+      // Step label
+      noStroke();
+      fill(isNight ? color(230, 235, 255) : color(30, 50, 90));
+      textAlign(LEFT, CENTER);
+      textFont("sans-serif");
+      textSize(13);
+      text(optLabels[ritual[i] - 1], colX + 32, sy + 13);
+    }
+  }
+
+  // ── Page 1: Square + Triangle ───────────────────────────────────
+  if (guidebookPage === 1) {
+    drawRitualColumn(RITUAL_SQUARE,   pX + 44,          "square",   SHAPE_COLORS.square);
+    stroke(isNight ? color(60, 70, 140) : color(200, 210, 230));
+    strokeWeight(1);
+    line(pX + pW / 2, pY + 78, pX + pW / 2, pY + pH - 56);
+    drawRitualColumn(RITUAL_TRIANGLE, pX + pW / 2 + 26, "triangle", SHAPE_COLORS.triangle);
+  }
+
+  // ── Page 2: Circle + Diamond (afternoon/night only) ─────────────
+  if (guidebookPage === 2 && isAfternoonOrNight) {
+    drawRitualColumn(RITUAL_CIRCLE,  pX + 44,          "circle",  SHAPE_COLORS.circle);
+    stroke(isNight ? color(60, 70, 140) : color(200, 210, 230));
+    strokeWeight(1);
+    line(pX + pW / 2, pY + 78, pX + pW / 2, pY + pH - 56);
+    drawRitualColumn(RITUAL_DIAMOND, pX + pW / 2 + 26, "diamond", SHAPE_COLORS.diamond);
+  }
+
+  // ── Page navigation ─────────────────────────────────────────────
+  let navY = pY + pH - 54;
+  let navBtnW = 110, navBtnH = 36;
+
+  if (isAfternoonOrNight) {
+    // Prev button
+    if (guidebookPage > 1) {
+      let bx = pX + 20;
+      let hov = mouseX >= bx && mouseX <= bx + navBtnW && mouseY >= navY && mouseY <= navY + navBtnH;
+      fill(hov ? color(247, 247, 205) : color(220, 230, 245));
+      stroke(isNight ? color(80, 100, 180) : color(13, 67, 102));
+      strokeWeight(1.5);
+      rect(bx, navY, navBtnW, navBtnH, 8);
+      noStroke();
+      fill(isNight ? color(180, 200, 255) : color(13, 67, 102));
+      textAlign(CENTER, CENTER);
+      textFont("sans-serif");
+      textSize(13);
+      text("← Page 1", bx + navBtnW / 2, navY + navBtnH / 2);
+    }
+
+    // Next button
+    if (guidebookPage < 2) {
+      let bx = pX + pW - navBtnW - 20;
+      let hov = mouseX >= bx && mouseX <= bx + navBtnW && mouseY >= navY && mouseY <= navY + navBtnH;
+      fill(hov ? color(247, 247, 205) : color(220, 230, 245));
+      stroke(isNight ? color(80, 100, 180) : color(13, 67, 102));
+      strokeWeight(1.5);
+      rect(bx, navY, navBtnW, navBtnH, 8);
+      noStroke();
+      fill(isNight ? color(180, 200, 255) : color(13, 67, 102));
+      textAlign(CENTER, CENTER);
+      textFont("sans-serif");
+      textSize(13);
+      text("Page 2 →", bx + navBtnW / 2, navY + navBtnH / 2);
+    }
+  }
+
+  // ── Close button ────────────────────────────────────────────────
+  let cbW = 170, cbH = 40;
+  let cbX = width / 2 - cbW / 2, cbY = pY + pH - cbH - 8;
+  let chov = mouseX >= cbX && mouseX <= cbX + cbW && mouseY >= cbY && mouseY <= cbY + cbH;
+  fill(chov ? color(247, 247, 205) : color(220, 230, 245));
+  stroke(isNight ? color(80, 100, 180) : color(13, 67, 102));
+  strokeWeight(1.5);
+  rect(cbX, cbY, cbW, cbH, 8);
+  noStroke();
+  fill(isNight ? color(180, 200, 255) : color(13, 67, 102));
+  textAlign(CENTER, CENTER);
+  textFont("sans-serif");
+  textSize(14);
+  text("✕  Close Guidebook", cbX + cbW / 2, cbY + cbH / 2);
+
+  pop();
+}
+
+// ── Game Won screen ────────────────────────────────────────────────
+function drawGameWon() {
+  noStroke();
+  fill(0, 0, 0, 150);
+  rect(0, 0, width, height);
+  let cW = 520, cH = 300;
+  let cX = width / 2 - cW / 2, cY = height / 2 - cH / 2;
+  fill(0, 0, 0, 70);
+  noStroke();
+  rect(cX + 8, cY + 8, cW, cH, 14);
+  fill(18, 44, 28);
+  stroke(40, 180, 80);
+  strokeWeight(3);
+  rect(cX, cY, cW, cH, 12);
+  fill(40, 150, 70);
+  noStroke();
+  rect(cX, cY, cW, 48, 12, 12, 0, 0);
+  fill(255);
+  textAlign(CENTER, CENTER);
+  textFont("Georgia, serif");
+  textSize(30);
+  text("SHIFT COMPLETE!", width / 2, cY + 24);
+  fill(200, 165, 60);
+  noStroke();
+  textFont("sans-serif");
+  textSize(52);
+  text("★", width / 2, cY + 108);
+  noStroke();
+  fill(200, 220, 210);
+  textFont("sans-serif");
+  textSize(16);
+  text("You survived all 100 cars of the night shift.", width / 2, cY + 175);
+  fill(140, 170, 150);
+  textSize(13);
+  text("Refresh the page to play again.", width / 2, cY + 205);
+  stroke(30, 100, 50);
+  strokeWeight(1);
+  line(cX + 30, cY + cH - 28, cX + cW - 30, cY + cH - 28);
+  noStroke();
+  fill(60, 140, 80);
+  textSize(11);
+  text("PAWS PARKING AUTHORITY", width / 2, cY + cH - 14);
 }
