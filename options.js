@@ -19,8 +19,8 @@ let speakerX, speakerY, speakerW, speakerH;
 let speakerButtonX, speakerButtonY, speakerButtonW, speakerButtonH;
 
 // ── License scan state ─────────────────────────────────────────────
-let scanStartTime = -1;    // millis() when scan began (-1 = not started)
-let scanComplete = false;  // true once the 5-second scan finishes
+let scanStartTime = -1; // millis() when scan began (-1 = not started)
+let scanComplete = false; // true once the 5-second scan finishes
 const SCAN_DURATION = 3000; // ms
 
 // ─── Colour palette ───────────────────────────────────────────────
@@ -33,6 +33,11 @@ const C_BTNPRESS = [180, 200, 220];
 const C_DISABLED = [160, 175, 190];
 const C_ACCENT = [220, 50, 50]; // red accent
 const C_GOLD = [200, 165, 60];
+
+// ─── Training highlight pulse ──────────────────────────────────────
+// glowPhase increases every frame and drives a sin-wave pulse on the
+// highlighted button. Stored here so options.js owns it.
+let trainingGlowPhase = 0;
 
 function drawOptions() {
   bottommenu();
@@ -47,6 +52,15 @@ function bottommenu() {
   let btnW = menuW / 5;
   let btnH = 160;
   let btnY = menuY + (menuH - btnH) / 2;
+
+  // Advance glow phase every frame
+  trainingGlowPhase += 0.08;
+
+  // Which button should glow? (-1 = none)
+  let highlightIdx =
+    typeof getTrainingHighlightIndex === "function"
+      ? getTrainingHighlightIndex()
+      : -1;
 
   // Panel background — dark booth counter
   push();
@@ -90,7 +104,30 @@ function bottommenu() {
     let pres = hov && mouseIsPressed;
     let dis = typeof disabled !== "undefined" && disabled[i];
 
+    // Is this the training highlight button?
+    let isHighlight = i === highlightIdx && !dis;
+    let glowAmt = isHighlight ? sin(trainingGlowPhase) * 0.5 + 0.5 : 0; // 0..1
+
     push();
+
+    // ── Training highlight: outer glow rings ──────────────────────
+    if (isHighlight) {
+      // Three expanding rings with decreasing opacity
+      noFill();
+      for (let ring = 0; ring < 3; ring++) {
+        let ringAlpha = map(glowAmt, 0, 1, 20, 90) - ring * 22;
+        let expand = ring * 6 + glowAmt * 8;
+        stroke(60, 220, 120, ringAlpha);
+        strokeWeight(3 - ring * 0.8);
+        rect(
+          bx - expand,
+          by - expand,
+          bw + expand * 2,
+          bh + expand * 2,
+          10 + expand,
+        );
+      }
+    }
 
     // Button shadow
     noStroke();
@@ -100,6 +137,12 @@ function bottommenu() {
     // Button face
     if (dis) {
       fill(C_DISABLED[0], C_DISABLED[1], C_DISABLED[2]);
+    } else if (isHighlight) {
+      // Blend between normal and a bright green-tinted face
+      let r = lerp(C_BTNBG[0], 220, glowAmt * 0.35);
+      let g = lerp(C_BTNBG[1], 255, glowAmt * 0.45);
+      let b2 = lerp(C_BTNBG[2], 220, glowAmt * 0.25);
+      fill(r, g, b2);
     } else if (pres) {
       fill(C_BTNPRESS[0], C_BTNPRESS[1], C_BTNPRESS[2]);
     } else if (hov) {
@@ -108,17 +151,51 @@ function bottommenu() {
       fill(C_BTNBG[0], C_BTNBG[1], C_BTNBG[2]);
     }
     stroke(C_NAVY[0], C_NAVY[1], C_NAVY[2]);
-    strokeWeight(1.5);
+    strokeWeight(isHighlight ? 2.5 : 1.5);
+    if (isHighlight) {
+      // Green border on highlight
+      let borderAlpha = map(glowAmt, 0, 1, 160, 255);
+      stroke(40, 200, 90, borderAlpha);
+    }
     rect(bx, by, bw, bh, 8);
 
     // Top accent bar
     noStroke();
     if (dis) {
       fill(120, 140, 160);
+    } else if (isHighlight) {
+      fill(40, map(glowAmt, 0, 1, 160, 220), 90, 255);
     } else {
       fill(C_NAVY[0], C_NAVY[1], C_NAVY[2]);
     }
     rect(bx + 1, by + 1, bw - 2, 6, 8, 8, 0, 0);
+
+    // ── Highlight: step number badge (top-left of button) ─────────
+    if (isHighlight && typeof getTrainingHighlightIndex === "function") {
+      // Work out what step number this is
+      let shapeIndex = submissions.length % shapeArray.length;
+      let shape = shapeArray[shapeIndex];
+      let ritual = getRitualForShape(shape);
+      let stepNum = clickHistory.length + 1; // 1-based next step
+
+      let badgePulse = map(glowAmt, 0, 1, 180, 255);
+      noStroke();
+      fill(40, 200, 90, badgePulse);
+      ellipse(bx + 16, by + 16, 26, 26);
+      fill(255);
+      textAlign(CENTER, CENTER);
+      textFont("sans-serif");
+      textStyle(BOLD);
+      textSize(12);
+      text(stepNum, bx + 16, by + 17);
+      textStyle(NORMAL);
+
+      // "NEXT" label under the step badge
+      fill(40, 200, 90, map(glowAmt, 0, 1, 120, 200));
+      textFont("sans-serif");
+      textSize(7);
+      text("NEXT", bx + 16, by + 30);
+    }
 
     // Icon
     let iconX = bx + bw / 2;
@@ -133,8 +210,7 @@ function bottommenu() {
     textSize(12);
     text(options[i].label, iconX, by + bh * 0.76);
 
-    // Done tick when disabled
-    // Order number badge when disabled
+    // Done tick when disabled — show order number badge
     if (dis) {
       let orderNum = clickHistory.indexOf(i + 1) + 1;
       let badgeCX = bx + bw - 12;
@@ -396,7 +472,10 @@ function drawModal() {
       rect(px + 4, scanY - 4, pw - 8, 8);
 
       // Progress bar
-      let barX = fx, barY = fy + fh + 14, barW = fw, barH = 10;
+      let barX = fx,
+        barY = fy + fh + 14,
+        barW = fw,
+        barH = 10;
       noStroke();
       fill(200, 215, 230);
       rect(barX, barY, barW, barH, 5);
@@ -421,7 +500,8 @@ function drawModal() {
       rect(fx, fy, fw, fh, 10);
 
       // Green tick mark in centre of viewfinder
-      let tickCX = fx + fw / 2, tickCY = fy + fh / 2 - 6;
+      let tickCX = fx + fw / 2,
+        tickCY = fy + fh / 2 - 6;
       stroke(40, 180, 80);
       strokeWeight(5);
       noFill();
@@ -680,7 +760,7 @@ function drawModal() {
 
   // ── Close button ──────────────────────────────────────────────
   // Locked while a license scan is in progress
-  let scanBlocking = (currentOptionIndex === 1 && !scanComplete);
+  let scanBlocking = currentOptionIndex === 1 && !scanComplete;
   let chov =
     !scanBlocking &&
     mouseX >= closeX &&
@@ -697,10 +777,18 @@ function drawModal() {
   strokeWeight(1.5);
   rect(closeX, closeY, closeW, closeH, 6);
   noStroke();
-  fill(scanBlocking ? 120 : C_NAVY[0], scanBlocking ? 120 : C_NAVY[1], scanBlocking ? 120 : C_NAVY[2]);
+  fill(
+    scanBlocking ? 120 : C_NAVY[0],
+    scanBlocking ? 120 : C_NAVY[1],
+    scanBlocking ? 120 : C_NAVY[2],
+  );
   textAlign(CENTER, CENTER);
   textSize(14);
-  text(scanBlocking ? "⏳ Wait…" : "✕  Close", closeX + closeW / 2, closeY + closeH / 2);
+  text(
+    scanBlocking ? "⏳ Wait…" : "✕  Close",
+    closeX + closeW / 2,
+    closeY + closeH / 2,
+  );
 
   pop();
 }

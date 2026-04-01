@@ -1,9 +1,9 @@
 // ── Preset ritual sequences ─────────────────────────────────────────
 // 1=Check Ticket  2=Check License  3=Click Pen  4=Stamp Guest Log  5=Talk Into Speaker
-const RITUAL_SQUARE   = [1, 3, 5, 2, 4]; // Check Ticket → Click Pen → Talk Into Speaker → Check License → Stamp Guest Log
+const RITUAL_SQUARE = [1, 3, 5, 2, 4]; // Check Ticket → Click Pen → Talk Into Speaker → Check License → Stamp Guest Log
 const RITUAL_TRIANGLE = [4, 2, 1, 5, 3]; // Stamp Guest Log → Check License → Check Ticket → Talk Into Speaker → Click Pen
-const RITUAL_CIRCLE   = [2, 5, 3, 1, 4]; // Check License → Talk Into Speaker → Click Pen → Check Ticket → Stamp Guest Log
-const RITUAL_DIAMOND  = [5, 1, 4, 3, 2]; // Talk Into Speaker → Check Ticket → Stamp Guest Log → Click Pen → Check License
+const RITUAL_CIRCLE = [2, 5, 3, 1, 4]; // Check License → Talk Into Speaker → Click Pen → Check Ticket → Stamp Guest Log
+const RITUAL_DIAMOND = [5, 1, 4, 3, 2]; // Talk Into Speaker → Check Ticket → Stamp Guest Log → Click Pen → Check License
 
 let clickHistory = [];
 let disabled = [false, false, false, false, false];
@@ -16,10 +16,10 @@ let showGuidebook = false;
 let gameWon = false;
 // Shape colours — used by car badge, past-customers bar, and guidebook
 const SHAPE_COLORS = {
-  square:   [40,  120, 220],
-  triangle: [220,  60,  60],
-  circle:   [220, 130,  30],
-  diamond:  [140,  50, 200],
+  square: [40, 120, 220],
+  triangle: [220, 60, 60],
+  circle: [220, 130, 30],
+  diamond: [140, 50, 200],
 };
 
 let guidebookPage = 1; // 1 or 2
@@ -29,18 +29,69 @@ let guidebookPage = 1; // 1 or 2
 // Afternoon & Night: all four shapes + none
 let shapeArray = [];
 
+// ── Training guest tracking ────────────────────────────────────────
+// A "training guest" is the first time a particular shape appears.
+// During training: no timer runs, and the next required button is highlighted.
+let seenShapes = new Set(); // shapes already trained on
+
+function isTrainingGuest() {
+  let shapeIndex = submissions.length % shapeArray.length;
+  let shape = shapeArray[shapeIndex];
+  if (shape === "none") return false; // free-choice is never training
+  return !seenShapes.has(shape);
+}
+
+// Returns which button index (0-based) should be highlighted next,
+// or -1 if we're not in training mode or the guest is done clicking.
+function getTrainingHighlightIndex() {
+  if (!isTrainingGuest()) return -1;
+  let shapeIndex = submissions.length % shapeArray.length;
+  let shape = shapeArray[shapeIndex];
+  let ritual = getRitualForShape(shape);
+  if (!ritual) return -1;
+  let nextStep = clickHistory.length; // how many steps already clicked
+  if (nextStep >= ritual.length) return -1;
+  return ritual[nextStep] - 1; // convert 1-based to 0-based button index
+}
+
+function getRitualForShape(shape) {
+  if (shape === "square") return RITUAL_SQUARE;
+  if (shape === "triangle") return RITUAL_TRIANGLE;
+  if (shape === "circle") return RITUAL_CIRCLE;
+  if (shape === "diamond") return RITUAL_DIAMOND;
+  return null;
+}
+
 function buildShapeArrayForShift(shiftId) {
   let pool;
   if (shiftId === "morning") {
-    pool = ["square","square","square","triangle","triangle","triangle","none","none"];
+    pool = [
+      "square",
+      "square",
+      "square",
+      "triangle",
+      "triangle",
+      "triangle",
+      "none",
+      "none",
+    ];
   } else {
     pool = [
-      "square","square","triangle","triangle",
-      "circle","circle","diamond","diamond",
-      "none","none"
+      "square",
+      "square",
+      "triangle",
+      "triangle",
+      "circle",
+      "circle",
+      "diamond",
+      "diamond",
+      "none",
+      "none",
     ];
   }
-  // Fisher-Yates shuffle
+  // Fisher-Yates shuffle — but ensure the first unseen shapes appear first
+  // so training guests are encountered early in the shift.
+  // We keep it simple: just shuffle normally; the seenShapes set handles detection.
   for (let i = pool.length - 1; i > 0; i--) {
     let j = floor(random(i + 1));
     [pool[i], pool[j]] = [pool[j], pool[i]];
@@ -174,7 +225,7 @@ let timerExpired = false; // did the timer run out?
 let lastFrameTime = 0;
 let shiftGuestsCompleted = 0; // how many non-training guests done this shift
 
-// No training guests — rituals are preset, timer starts from guest 1
+// No hard-coded training count — training is determined per-shape via seenShapes
 const TRAINING_GUESTS = 0;
 
 // ── Car animation ──
@@ -235,7 +286,14 @@ function setup() {
 
 function refreshFrozenCar() {
   let animalList = [
-    "dog", "cat", "bear", "fox", "rabbit", "dog", "cat", "bear",
+    "dog",
+    "cat",
+    "bear",
+    "fox",
+    "rabbit",
+    "dog",
+    "cat",
+    "bear",
   ];
   let shapeIndex = submissions.length % shapeArray.length;
   frozenShape = shapeArray[shapeIndex];
@@ -257,8 +315,8 @@ function draw() {
 
 // ── Timer tick ─────────────────────────────────────────────────────
 function tickTimer() {
-  // No timer for training guests
-  if (submissions.length < TRAINING_GUESTS) return;
+  // No timer during training guests
+  if (isTrainingGuest()) return;
   if (!shiftTimerActive || timerExpired) return;
 
   let now = millis();
@@ -315,7 +373,8 @@ function _checkShiftAdvance() {
 let pendingShiftTransition = false;
 
 function startTimerIfNeeded() {
-  if (submissions.length < TRAINING_GUESTS) return;
+  // Never start timer during training
+  if (isTrainingGuest()) return;
   if (!timerStarted && carState === "waiting") {
     timerStarted = true;
     shiftTimerActive = true;
@@ -331,7 +390,7 @@ function updateCarAnim() {
       carState = "waiting";
       resetShiftTimer();
       lastFrameTime = millis();
-      // Timer starts automatically as soon as the car arrives
+      // Timer starts automatically as soon as the car arrives (unless training)
       startTimerIfNeeded();
     }
   }
@@ -655,11 +714,15 @@ function runGame() {
       frozenGuestLabel,
     );
 
-    // Draw timer and clock (only after training)
-    if (submissions.length >= TRAINING_GUESTS) {
+    // Draw timer and clock (only for non-training guests)
+    if (!isTrainingGuest()) {
       drawShiftTimer();
       drawShiftBadge();
       drawGameClock();
+    } else {
+      // Still draw shift badge during training
+      drawShiftBadge();
+      drawTrainingBadge();
     }
   }
 
@@ -672,11 +735,60 @@ function runGame() {
   displayCompletion();
 }
 
+// ── Training badge (replaces timer during training guests) ─────────
+function drawTrainingBadge() {
+  let sh = getCurrentShift();
+  let isNight = sh.id === "night";
+  let x = 18,
+    y = height / 2 - 80,
+    w = 74,
+    h = 160;
+
+  push();
+  noStroke();
+  fill(0, 0, 0, 50);
+  rect(x + 3, y + 4, w, h, 10);
+
+  fill(isNight ? color(18, 60, 30, 230) : color(30, 120, 60, 220));
+  stroke(isNight ? color(80, 210, 120) : color(180, 255, 180));
+  strokeWeight(1.5);
+  rect(x, y, w, h, 10);
+
+  // Header
+  noStroke();
+  fill(60, 200, 100, 220);
+  rect(x + 1, y + 1, w - 2, 22, 9, 9, 0, 0);
+  fill(10, 40, 18);
+  textAlign(CENTER, CENTER);
+  textFont("sans-serif");
+  textSize(8);
+  text("TRAINING", x + w / 2, y + 12);
+
+  // Star / training icon
+  fill(60, 200, 100);
+  noStroke();
+  textAlign(CENTER, CENTER);
+  textSize(28);
+  text("★", x + w / 2, y + 60);
+
+  // "No timer" text
+  fill(180, 255, 200);
+  textFont("sans-serif");
+  textSize(9);
+  textAlign(CENTER, CENTER);
+  text("No time\nlimit!", x + w / 2, y + 96);
+
+  // Follow the glow text
+  fill(60, 200, 100, 200);
+  textSize(8);
+  text("Follow the\nhighlights!", x + w / 2, y + 130);
+
+  pop();
+}
+
 // ── Timer widget ───────────────────────────────────────────────────
 function drawShiftTimer() {
   let sh = getCurrentShift();
-  let isTraining = submissions.length < TRAINING_GUESTS;
-  if (isTraining) return;
 
   let x = 18,
     y = height / 2 - 80;
@@ -833,16 +945,26 @@ function mousePressed() {
   if (gameOver || gameWon) return;
 
   // ── Guidebook button (always checked first during play) ──
-  let gbX = 15, gbY = height - 195, gbW = 80, gbH = 80;
-  if (mouseX >= gbX && mouseX <= gbX + gbW && mouseY >= gbY && mouseY <= gbY + gbH) {
+  let gbX = 15,
+    gbY = height - 195,
+    gbW = 80,
+    gbH = 80;
+  if (
+    mouseX >= gbX &&
+    mouseX <= gbX + gbW &&
+    mouseY >= gbY &&
+    mouseY <= gbY + gbH
+  ) {
     if (!showGuidebook) {
       showGuidebook = true;
       guidebookPage = 1;
-      // Start the timer if not already running
-      startTimerIfNeeded();
-      // Deduct 5 seconds from the current car's timer
-      if (timerStarted) {
-        shiftTimerSeconds = max(0, shiftTimerSeconds - 5);
+      // Start the timer if not already running (only for non-training guests)
+      if (!isTrainingGuest()) {
+        startTimerIfNeeded();
+        // Deduct 5 seconds from the current car's timer
+        if (timerStarted) {
+          shiftTimerSeconds = max(0, shiftTimerSeconds - 5);
+        }
       }
     }
     return;
@@ -850,17 +972,26 @@ function mousePressed() {
 
   // ── Guidebook close / page navigation ──
   if (showGuidebook) {
-    let pW = 600, pH = 520;
-    let pX = width / 2 - pW / 2, pY = height / 2 - pH / 2;
+    let pW = 600,
+      pH = 520;
+    let pX = width / 2 - pW / 2,
+      pY = height / 2 - pH / 2;
     let sh2 = getCurrentShift();
-    let isAfternoonOrNight = sh2 && (sh2.id === "afternoon" || sh2.id === "night");
+    let isAfternoonOrNight =
+      sh2 && (sh2.id === "afternoon" || sh2.id === "night");
     let navY = pY + pH - 54;
-    let navBtnW = 110, navBtnH = 36;
+    let navBtnW = 110,
+      navBtnH = 36;
 
     // Prev button (page 2 → 1)
     if (isAfternoonOrNight && guidebookPage > 1) {
       let bx = pX + 20;
-      if (mouseX >= bx && mouseX <= bx + navBtnW && mouseY >= navY && mouseY <= navY + navBtnH) {
+      if (
+        mouseX >= bx &&
+        mouseX <= bx + navBtnW &&
+        mouseY >= navY &&
+        mouseY <= navY + navBtnH
+      ) {
         guidebookPage = 1;
         return;
       }
@@ -868,16 +999,28 @@ function mousePressed() {
     // Next button (page 1 → 2)
     if (isAfternoonOrNight && guidebookPage < 2) {
       let bx = pX + pW - navBtnW - 20;
-      if (mouseX >= bx && mouseX <= bx + navBtnW && mouseY >= navY && mouseY <= navY + navBtnH) {
+      if (
+        mouseX >= bx &&
+        mouseX <= bx + navBtnW &&
+        mouseY >= navY &&
+        mouseY <= navY + navBtnH
+      ) {
         guidebookPage = 2;
         return;
       }
     }
 
     // Close button
-    let cbW = 170, cbH = 40;
-    let cbX = width / 2 - cbW / 2, cbY = pY + pH - cbH - 8;
-    if (mouseX >= cbX && mouseX <= cbX + cbW && mouseY >= cbY && mouseY <= cbY + cbH) {
+    let cbW = 170,
+      cbH = 40;
+    let cbX = width / 2 - cbW / 2,
+      cbY = pY + pH - cbH - 8;
+    if (
+      mouseX >= cbX &&
+      mouseX <= cbX + cbW &&
+      mouseY >= cbY &&
+      mouseY <= cbY + cbH
+    ) {
       showGuidebook = false;
     }
     return; // block all game clicks while guidebook is open
@@ -892,15 +1035,21 @@ function mousePressed() {
 
   modalMouseClicked();
 
-  // Start timer on first interaction
-  if (!timerStarted && submissions.length >= TRAINING_GUESTS) {
+  // Start timer on first interaction (only for non-training guests)
+  if (
+    !isTrainingGuest() &&
+    !timerStarted &&
+    submissions.length >= TRAINING_GUESTS
+  ) {
     startTimerIfNeeded();
   }
 
   bottomMenuMouseClicked();
 
-  // Also start timer when a menu button is clicked
-  startTimerIfNeeded();
+  // Also start timer when a menu button is clicked (non-training only)
+  if (!isTrainingGuest()) {
+    startTimerIfNeeded();
+  }
 
   // Submit button
   let submitSize = 100,
@@ -922,21 +1071,22 @@ function mousePressed() {
     timerExpired = false;
 
     guestIndex++;
-    submissions.push([...clickHistory]);
+    let guestShapeIndex = submissions.length % shapeArray.length;
+    let guestShape = shapeArray[guestShapeIndex];
 
-    // Every guest is checked against the preset rituals
-    let guestShapeIndex = submissions.length - 1;
-    let guestShape = shapeArray[guestShapeIndex % shapeArray.length];
+    // Mark this shape as trained
+    if (guestShape !== "none") {
+      seenShapes.add(guestShape);
+    }
+
+    submissions.push([...clickHistory]);
 
     if (guestShape === "none") {
       isMatch = true;
     } else {
-      let patternToMatch =
-        guestShape === "square"   ? RITUAL_SQUARE   :
-        guestShape === "triangle" ? RITUAL_TRIANGLE :
-        guestShape === "circle"   ? RITUAL_CIRCLE   :
-                                    RITUAL_DIAMOND;
+      let patternToMatch = getRitualForShape(guestShape);
       isMatch =
+        patternToMatch !== null &&
         patternToMatch.length === clickHistory.length &&
         patternToMatch.every((val, idx) => val === clickHistory[idx]);
     }
@@ -1081,17 +1231,29 @@ function drawFeedbackShape() {
 
 // ── Guidebook button (bottom-left, outside booth panel) ────────────
 function drawGuidebookButton() {
-  let bX = 15, bY = height - 195, bW = 80, bH = 80;
-  let hov = !showGuidebook &&
-            mouseX >= bX && mouseX <= bX + bW &&
-            mouseY >= bY && mouseY <= bY + bH;
+  let bX = 15,
+    bY = height - 195,
+    bW = 80,
+    bH = 80;
+  let hov =
+    !showGuidebook &&
+    mouseX >= bX &&
+    mouseX <= bX + bW &&
+    mouseY >= bY &&
+    mouseY <= bY + bH;
 
   push();
   noStroke();
   fill(0, 0, 0, 40);
   rect(bX + 3, bY + 4, bW, bH, 10);
 
-  fill(showGuidebook ? color(200, 165, 60) : hov ? color(247, 247, 205) : color(240, 248, 255));
+  fill(
+    showGuidebook
+      ? color(200, 165, 60)
+      : hov
+        ? color(247, 247, 205)
+        : color(240, 248, 255),
+  );
   stroke(13, 67, 102);
   strokeWeight(2);
   rect(bX, bY, bW, bH, 10);
@@ -1132,15 +1294,23 @@ function drawGuidebook() {
   let sh = getCurrentShift();
   let isNight = sh && sh.id === "night";
   let isAfternoonOrNight = sh && (sh.id === "afternoon" || sh.id === "night");
-  let optLabels = ["Check Ticket", "Check License", "Click Pen", "Stamp Guest Log", "Talk Into Speaker"];
+  let optLabels = [
+    "Check Ticket",
+    "Check License",
+    "Click Pen",
+    "Stamp Guest Log",
+    "Talk Into Speaker",
+  ];
 
   push();
   noStroke();
   fill(0, 0, 0, 165);
   rect(0, 0, width, height);
 
-  let pW = 600, pH = 520;
-  let pX = width / 2 - pW / 2, pY = height / 2 - pH / 2;
+  let pW = 600,
+    pH = 520;
+  let pX = width / 2 - pW / 2,
+    pY = height / 2 - pH / 2;
 
   // Drop shadow
   fill(0, 0, 0, 60);
@@ -1203,7 +1373,14 @@ function drawGuidebook() {
       fill(ac);
       stroke(isNight ? color(255, 180, 180) : color(13, 67, 102));
       strokeWeight(1.5);
-      triangle(colX + badgeSz / 2, colY, colX, colY + th, colX + badgeSz, colY + th);
+      triangle(
+        colX + badgeSz / 2,
+        colY,
+        colX,
+        colY + th,
+        colX + badgeSz,
+        colY + th,
+      );
     } else if (badgeShape === "circle") {
       fill(ac);
       stroke(isNight ? color(255, 200, 140) : color(13, 67, 102));
@@ -1214,10 +1391,16 @@ function drawGuidebook() {
       stroke(isNight ? color(220, 180, 255) : color(13, 67, 102));
       strokeWeight(1.5);
       let hd = badgeSz / 2;
-      quad(colX + hd, colY,
-           colX + badgeSz, colY + hd,
-           colX + hd, colY + badgeSz,
-           colX, colY + hd);
+      quad(
+        colX + hd,
+        colY,
+        colX + badgeSz,
+        colY + hd,
+        colX + hd,
+        colY + badgeSz,
+        colX,
+        colY + hd,
+      );
     }
 
     // Column title
@@ -1227,8 +1410,12 @@ function drawGuidebook() {
     textFont("sans-serif");
     textStyle(BOLD);
     textSize(14);
-    let titleMap = {square:"Square Ritual", triangle:"Triangle Ritual",
-                    circle:"Circle Ritual", diamond:"Diamond Ritual"};
+    let titleMap = {
+      square: "Square Ritual",
+      triangle: "Triangle Ritual",
+      circle: "Circle Ritual",
+      diamond: "Diamond Ritual",
+    };
     text(titleMap[badgeShape], colX + 36, colY + 14);
     textStyle(NORMAL);
 
@@ -1265,31 +1452,46 @@ function drawGuidebook() {
 
   // ── Page 1: Square + Triangle ───────────────────────────────────
   if (guidebookPage === 1) {
-    drawRitualColumn(RITUAL_SQUARE,   pX + 44,          "square",   SHAPE_COLORS.square);
+    drawRitualColumn(RITUAL_SQUARE, pX + 44, "square", SHAPE_COLORS.square);
     stroke(isNight ? color(60, 70, 140) : color(200, 210, 230));
     strokeWeight(1);
     line(pX + pW / 2, pY + 78, pX + pW / 2, pY + pH - 56);
-    drawRitualColumn(RITUAL_TRIANGLE, pX + pW / 2 + 26, "triangle", SHAPE_COLORS.triangle);
+    drawRitualColumn(
+      RITUAL_TRIANGLE,
+      pX + pW / 2 + 26,
+      "triangle",
+      SHAPE_COLORS.triangle,
+    );
   }
 
   // ── Page 2: Circle + Diamond (afternoon/night only) ─────────────
   if (guidebookPage === 2 && isAfternoonOrNight) {
-    drawRitualColumn(RITUAL_CIRCLE,  pX + 44,          "circle",  SHAPE_COLORS.circle);
+    drawRitualColumn(RITUAL_CIRCLE, pX + 44, "circle", SHAPE_COLORS.circle);
     stroke(isNight ? color(60, 70, 140) : color(200, 210, 230));
     strokeWeight(1);
     line(pX + pW / 2, pY + 78, pX + pW / 2, pY + pH - 56);
-    drawRitualColumn(RITUAL_DIAMOND, pX + pW / 2 + 26, "diamond", SHAPE_COLORS.diamond);
+    drawRitualColumn(
+      RITUAL_DIAMOND,
+      pX + pW / 2 + 26,
+      "diamond",
+      SHAPE_COLORS.diamond,
+    );
   }
 
   // ── Page navigation ─────────────────────────────────────────────
   let navY = pY + pH - 54;
-  let navBtnW = 110, navBtnH = 36;
+  let navBtnW = 110,
+    navBtnH = 36;
 
   if (isAfternoonOrNight) {
     // Prev button
     if (guidebookPage > 1) {
       let bx = pX + 20;
-      let hov = mouseX >= bx && mouseX <= bx + navBtnW && mouseY >= navY && mouseY <= navY + navBtnH;
+      let hov =
+        mouseX >= bx &&
+        mouseX <= bx + navBtnW &&
+        mouseY >= navY &&
+        mouseY <= navY + navBtnH;
       fill(hov ? color(247, 247, 205) : color(220, 230, 245));
       stroke(isNight ? color(80, 100, 180) : color(13, 67, 102));
       strokeWeight(1.5);
@@ -1305,7 +1507,11 @@ function drawGuidebook() {
     // Next button
     if (guidebookPage < 2) {
       let bx = pX + pW - navBtnW - 20;
-      let hov = mouseX >= bx && mouseX <= bx + navBtnW && mouseY >= navY && mouseY <= navY + navBtnH;
+      let hov =
+        mouseX >= bx &&
+        mouseX <= bx + navBtnW &&
+        mouseY >= navY &&
+        mouseY <= navY + navBtnH;
       fill(hov ? color(247, 247, 205) : color(220, 230, 245));
       stroke(isNight ? color(80, 100, 180) : color(13, 67, 102));
       strokeWeight(1.5);
@@ -1320,9 +1526,15 @@ function drawGuidebook() {
   }
 
   // ── Close button ────────────────────────────────────────────────
-  let cbW = 170, cbH = 40;
-  let cbX = width / 2 - cbW / 2, cbY = pY + pH - cbH - 8;
-  let chov = mouseX >= cbX && mouseX <= cbX + cbW && mouseY >= cbY && mouseY <= cbY + cbH;
+  let cbW = 170,
+    cbH = 40;
+  let cbX = width / 2 - cbW / 2,
+    cbY = pY + pH - cbH - 8;
+  let chov =
+    mouseX >= cbX &&
+    mouseX <= cbX + cbW &&
+    mouseY >= cbY &&
+    mouseY <= cbY + cbH;
   fill(chov ? color(247, 247, 205) : color(220, 230, 245));
   stroke(isNight ? color(80, 100, 180) : color(13, 67, 102));
   strokeWeight(1.5);
@@ -1342,8 +1554,10 @@ function drawGameWon() {
   noStroke();
   fill(0, 0, 0, 150);
   rect(0, 0, width, height);
-  let cW = 520, cH = 300;
-  let cX = width / 2 - cW / 2, cY = height / 2 - cH / 2;
+  let cW = 520,
+    cH = 300;
+  let cX = width / 2 - cW / 2,
+    cY = height / 2 - cH / 2;
   fill(0, 0, 0, 70);
   noStroke();
   rect(cX + 8, cY + 8, cW, cH, 14);
