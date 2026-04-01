@@ -7,8 +7,8 @@ const SHIFTS = [
     id: "morning",
     label: "MORNING SHIFT",
     sublabel: "06:00 – 12:00",
-    timerSeconds: 30,
-    guestCount: 3, // guests 3-5 (after 2 training guests)
+    timerSeconds: 45,
+    guestCount: 6,
     skyTop: [255, 200, 120],
     skyBot: [255, 235, 180],
     ambientDesc: "Take your time — the morning rush is gentle.",
@@ -18,8 +18,8 @@ const SHIFTS = [
     id: "afternoon",
     label: "AFTERNOON SHIFT",
     sublabel: "12:00 – 18:00",
-    timerSeconds: 15,
-    guestCount: 3, // guests 6-8
+    timerSeconds: 30,
+    guestCount: 8,
     skyTop: [100, 170, 230],
     skyBot: [180, 215, 245],
     ambientDesc: "Lunch rush. Things are picking up speed.",
@@ -29,8 +29,8 @@ const SHIFTS = [
     id: "night",
     label: "NIGHT SHIFT",
     sublabel: "18:00 – ???",
-    timerSeconds: 10,
-    guestCount: Infinity, // endless until game over
+    timerSeconds: 20,
+    guestCount: 100,
     skyTop: [18, 22, 48],
     skyBot: [35, 42, 78],
     ambientDesc: "Graveyard shift. Don't blink.",

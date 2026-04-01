@@ -19,156 +19,39 @@ function drawRoad() {
   pop();
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// drawMessage — first-person attendant narration bubble
-//
-// Priority order (highest first):
-//  1. Car not yet stopped — nothing to say
-//  2. Timer expired — overlay handles it; keep quiet
-//  3. Tried to open gate with no actions selected
-//  4. Tried to submit a duplicate ritual on a free-choice guest
-//  5. Training guest 1 (square) — explain the ritual concept
-//  6. Training guest 2 (triangle) — ask for a different order
-//  7. Actions in progress — tell player how many they've chosen so far
-//  8. No actions yet on a post-training guest — tell player what to do
-// ─────────────────────────────────────────────────────────────────────────────
 function drawMessage() {
-  if (typeof carState !== "undefined" && carState !== "waiting") return;
-
   let message = "";
-  let isTraining = submissions.length < TRAINING_GUESTS;
+  let yPos = height / 8;
+  let sh = typeof getCurrentShift === "function" ? getCurrentShift() : null;
 
-  // ── 3. Gate pressed with empty sequence ──────────────────────────
   if (triedToOpenGateWithoutSubmission) {
+    message = "I can't let anyone in yet! I didn't do the steps I need to do.";
+  } else if (submissions.length < 1) {
     message =
-      "I can't open the gate yet — I haven't done anything!\nI need to perform all 5 actions first.";
-
-    // ── 4. Duplicate ritual on free-choice guest ─────────────────────
-  } else if (
-    typeof triedToSubmitDuplicatePattern !== "undefined" &&
-    triedToSubmitDuplicatePattern
-  ) {
-    message =
-      "That order is already one of my rituals.\nFree guests need a fresh sequence — I'll try a different one.";
-
-    // ── 5. Training guest 1 (square badge) ───────────────────────────
-  } else if (submissions.length === 0) {
-    if (clickHistory.length === 0) {
-      message =
-        "My first guest! I can process them however I like.\nThe order I choose will become my Square Ritual — so I'll make it memorable.";
-    } else {
-      message =
-        "Good start. I've selected " +
-        clickHistory.length +
-        " of 5 actions.\nFinish the sequence, then open the gate.";
-    }
-
-    // ── 6. Training guest 2 (triangle badge) ─────────────────────────
+      "My first guest is here. I need to follow the correct ritual order — check the Guidebook if I forget!";
   } else if (submissions.length === 1) {
-    if (clickHistory.length === 0) {
-      message =
-        "Second guest — triangle badge. I need to choose a completely different order from my Square Ritual.\nThis sequence will become my Triangle Ritual.";
-    } else {
-      let dupWarning = _sequenceMatchesRitual1()
-        ? "  ⚠ This matches my Square Ritual — I must change it!"
-        : "";
-      message =
-        clickHistory.length +
-        " of 5 actions chosen." +
-        dupWarning +
-        "\nFinish up, then open the gate.";
-    }
+    message =
+      "One down. Remember: each car badge tells me which ritual to use. Square = Ritual 1, Triangle = Ritual 2.";
+  } else if (submissions.length === 2 && sh && sh.id === "morning") {
+    message =
+      "Morning shift — 45 seconds per guest. Take a breath and follow the ritual carefully.";
+  } else if (submissions.length > 1 && wrongCount === 0) {
+    message =
+      "Looks like there's more guests waiting. Let me do the right routine for each of them.";
+  } else if (submissions.length > 1 && wrongCount > 0 && !isMatch) {
+    message =
+      "Oh no. That felt wrong. Check the Guidebook and make sure I'm following the correct order!";
+  } else if (submissions.length > 1 && wrongCount > 0 && isMatch) {
+    message =
+      "Phew! I'm setting things right. Now my guests will be happy again!\nLet's keep going.";
+  }
 
-    // ── 7 & 8. Post-training guests ──────────────────────────────────
-  } else {
-    let guestShapeIndex = submissions.length - 2;
-    let guestShape = shapeArray[guestShapeIndex % shapeArray.length];
-
-    if (clickHistory.length === 0) {
-      // ── No actions yet — what does this guest need? ────────────────
-      if (wrongCount > 0 && typeof isMatch !== "undefined" && !isMatch) {
-        // Last guest was wrong — remind and redirect
-        if (guestShape === "square") {
-          message =
-            "I got the last one wrong and the weather is turning.\nSquare badge — I need to reproduce my Square Ritual exactly.";
-        } else if (guestShape === "triangle") {
-          message =
-            "I got the last one wrong and the weather is turning.\nTriangle badge — I need to reproduce my Triangle Ritual exactly.";
-        } else {
-          message =
-            "I got the last one wrong and the weather is turning.\nNo badge on this one — any order works, just not one of my rituals.";
-        }
-      } else if (wrongCount > 0 && typeof isMatch !== "undefined" && isMatch) {
-        // Just corrected after a wrong streak
-        if (guestShape === "square") {
-          message =
-            "Back on track! This guest has a square badge.\nTime to run through my Square Ritual again.";
-        } else if (guestShape === "triangle") {
-          message =
-            "Back on track! Triangle badge.\nLet me recall my Triangle Ritual and do it in the right order.";
-        } else {
-          message = "Back on track! No badge — any original sequence will do.";
-        }
-      } else {
-        // Clean state — straightforward prompt
-        if (guestShape === "square") {
-          message =
-            "Square badge. I know this one — reproduce my Square Ritual in the exact same order.";
-        } else if (guestShape === "triangle") {
-          message =
-            "Triangle badge. Run through my Triangle Ritual — same order as I set it.";
-        } else {
-          message =
-            "No badge — free choice. I can pick any order, as long as it's not one of my two established rituals.";
-        }
-      }
-    } else {
-      // ── Actions in progress ────────────────────────────────────────
-      let done = clickHistory.length;
-      let remaining = 5 - done;
-      if (guestShape === "square") {
-        let onTrack = _sequenceOnTrackForRitual(submissions[0]);
-        if (!onTrack && done > 0) {
-          message =
-            done +
-            " of 5 — this doesn't match my Square Ritual so far. I should start over.";
-        } else {
-          message =
-            done +
-            " of 5 actions done. " +
-            remaining +
-            " left — keep going with my Square Ritual.";
-        }
-      } else if (guestShape === "triangle") {
-        let onTrack = _sequenceOnTrackForRitual(submissions[1]);
-        if (!onTrack && done > 0) {
-          message =
-            done +
-            " of 5 — this doesn't match my Triangle Ritual so far. I should start over.";
-        } else {
-          message =
-            done +
-            " of 5 actions done. " +
-            remaining +
-            " left — keep going with my Triangle Ritual.";
-        }
-      } else {
-        // Free choice — warn if accidentally matching a ritual
-        let matchingRitual = _currentlyMatchingRitual();
-        if (matchingRitual) {
-          message =
-            done +
-            " of 5 — this is matching my " +
-            matchingRitual +
-            " Ritual!\nI need to go in a different order for free guests.";
-        } else {
-          message =
-            done +
-            " of 5 actions. " +
-            remaining +
-            " to go — any original order works.";
-        }
-      }
+  // Shift-specific pressure messages
+  if (sh) {
+    if (submissions.length >= 1 && sh.id === "afternoon" && message === "") {
+      message = "Afternoon rush — only 30 seconds per guest. Stay focused!";
+    } else if (submissions.length >= 1 && sh.id === "night" && message === "") {
+      message = "Night shift... 20 seconds per guest. Don't slip up.";
     }
   }
 
@@ -179,9 +62,7 @@ function drawMessage() {
   textSize(16);
   let padding = 10,
     maxWidth = width * 0.7;
-  let lines = message.split("\n");
-  let textBoxHeight = textLeading() * lines.length + 20;
-  let yPos = height / 8;
+  let textBoxHeight = textLeading() * message.split("\n").length + 20;
   rectMode(CENTER);
   noStroke();
   fill(247, 247, 205);
@@ -190,34 +71,6 @@ function drawMessage() {
   fill(13, 67, 102);
   text(message, width / 2, yPos, maxWidth - 40);
   pop();
-}
-
-// ── Helpers for in-progress sequence matching ─────────────────────
-
-// True if the current clickHistory is a prefix of the given ritual
-function _sequenceOnTrackForRitual(ritual) {
-  if (!ritual || ritual.length === 0) return true;
-  for (let i = 0; i < clickHistory.length; i++) {
-    if (clickHistory[i] !== ritual[i]) return false;
-  }
-  return true;
-}
-
-// Returns "Square" or "Triangle" if the in-progress clickHistory
-// is a prefix of (or fully matches) that ritual; null otherwise.
-function _currentlyMatchingRitual() {
-  if (submissions.length < 2) return null;
-  if (_sequenceOnTrackForRitual(submissions[0])) return "Square";
-  if (_sequenceOnTrackForRitual(submissions[1])) return "Triangle";
-  return null;
-}
-
-// True if current clickHistory matches ritual 1 exactly (used during training)
-function _sequenceMatchesRitual1() {
-  if (submissions.length < 1) return false;
-  let r = submissions[0];
-  if (r.length !== clickHistory.length) return false;
-  return r.every((v, i) => v === clickHistory[i]);
 }
 
 function submitButton() {
@@ -644,21 +497,33 @@ function drawCar(carX, carColor, shape, animalName, guestLabel) {
   arc(wBX, bBot + 2, wR * 2 + 12, wR * 2 + 12, PI * 0.85, PI * 1.0);
   if (shape !== "none") {
     let size = 44;
+    // White badge background
     fill(255);
     stroke(0);
     strokeWeight(2);
+    rect(carX - size / 2 - 3, bodyCenterY - size / 2 - 3, size + 6, size + 6, 5);
+    // Coloured shape inside badge
+    let sc = typeof SHAPE_COLORS !== "undefined" ? SHAPE_COLORS[shape] : null;
+    if (sc) fill(sc[0], sc[1], sc[2]);
+    else fill(100, 110, 130);
+    noStroke();
     if (shape === "square") {
       rect(carX - size / 2, bodyCenterY - size / 2, size, size, 3);
-    } else {
+    } else if (shape === "triangle") {
       let h = size * 0.866;
       triangle(
-        carX,
-        bodyCenterY - h / 2,
-        carX - size / 2,
-        bodyCenterY + h / 2,
-        carX + size / 2,
-        bodyCenterY + h / 2,
+        carX, bodyCenterY - h / 2,
+        carX - size / 2, bodyCenterY + h / 2,
+        carX + size / 2, bodyCenterY + h / 2,
       );
+    } else if (shape === "circle") {
+      ellipse(carX, bodyCenterY, size, size);
+    } else if (shape === "diamond") {
+      let hd = size / 2;
+      quad(carX,        bodyCenterY - hd,
+           carX + hd,   bodyCenterY,
+           carX,        bodyCenterY + hd,
+           carX - hd,   bodyCenterY);
     }
   }
   pop();
@@ -812,93 +677,89 @@ function drawTicketBooth(gateAngle) {
 // ─────────────────────────────────────────────
 function drawPastCustomers() {
   if (submissions.length === 0) return;
-  let sz = 22,
-    pad = 12,
-    barY = 28;
+  let sz = 22, pad = 12, barY = 28;
   let startX = width / 2 - (submissions.length * (sz + pad)) / 2;
-  let col1 = color(40, 120, 220),
-    col2 = color(220, 60, 60),
-    colN = color(180, 180, 180);
+
+  let col1 = color(40,  120, 220);
+  let col2 = color(220,  60,  60);
+  let col3 = color(220, 130,  30);
+  let col4 = color(140,  50, 200);
+  let colN = color(180, 180, 180);
 
   push();
+
+  // ── Legend (top-right) ──
+  let lx = width - 168, ly = 8;
+  noStroke();
+
+  // Square
+  fill(col1); rect(lx, ly,      10, 10, 2);
+  fill(60);   textAlign(LEFT, TOP); textSize(10); text("— ritual 1", lx + 14, ly);
+  // Triangle
+  fill(col2); triangle(lx+5, ly+16, lx, ly+26, lx+10, ly+26);
+  fill(60);   text("— ritual 2", lx + 14, ly + 16);
+  // Circle
+  fill(col3); ellipse(lx + 5, ly + 37, 10, 10);
+  fill(60);   text("— ritual 3", lx + 14, ly + 32);
+  // Diamond
+  fill(col4); quad(lx+5, ly+46, lx+10, ly+51, lx+5, ly+56, lx, ly+51);
+  fill(60);   text("— ritual 4", lx + 14, ly + 48);
+  // None
+  stroke(140); strokeWeight(1.5);
+  line(lx, ly + 68, lx + 10, ly + 68);
+  noStroke();
+  fill(60);   text("— anything", lx + 14, ly + 64);
+
+  // ── Past customer shapes ──
   noStroke();
   fill(13, 67, 102, 160);
   textAlign(RIGHT, CENTER);
   textSize(11);
   text("past customers", startX - 10, barY);
-  let lx = width - 160,
-    ly = 12;
-  textAlign(LEFT, TOP);
-  textSize(10);
-  fill(col1);
-  rect(lx, ly, 10, 10, 2);
-  fill(60);
-  text("— ritual 1", lx + 14, ly);
-  fill(col2);
-  rect(lx, ly + 16, 10, 10, 2);
-  fill(60);
-  text("— ritual 2", lx + 14, ly + 16);
-  stroke(140);
-  strokeWeight(1.5);
-  line(lx, ly + 38, lx + 10, ly + 38);
-  noStroke();
-  fill(60);
-  text("— anything", lx + 14, ly + 32);
 
   for (let i = 0; i < submissions.length; i++) {
     let x = startX + i * (sz + pad) + sz / 2;
-    let shapeType, col;
-    if (i === 0) {
-      shapeType = "square";
-      col = col1;
-    } else if (i === 1) {
-      shapeType = "triangle";
-      col = col2;
-    } else {
-      let shapeIndex = i - 2;
-      shapeType = shapeArray[shapeIndex % shapeArray.length];
-      col =
-        shapeType === "square" ? col1 : shapeType === "triangle" ? col2 : colN;
-    }
+    let shapeType = shapeArray[i % shapeArray.length];
+    let col =
+      shapeType === "square"   ? col1 :
+      shapeType === "triangle" ? col2 :
+      shapeType === "circle"   ? col3 :
+      shapeType === "diamond"  ? col4 : colN;
+
     if (shapeType !== "none") {
+      // Shadow
       noStroke();
       fill(0, 0, 0, 30);
-      if (shapeType === "square")
-        rect(x - sz / 2 + 2, barY - sz / 2 + 2, sz, sz, 3);
-      else {
-        let h = sz * 0.866;
-        triangle(
-          x + 2,
-          barY - h / 2 + 2,
-          x - sz / 2 + 2,
-          barY + h / 2 + 2,
-          x + sz / 2 + 2,
-          barY + h / 2 + 2,
-        );
-      }
+      _drawPastShape(shapeType, x + 2, barY + 2, sz);
     }
+
     fill(col);
     stroke(0);
     strokeWeight(1.2);
-    if (shapeType === "square") rect(x - sz / 2, barY - sz / 2, sz, sz, 3);
-    else if (shapeType === "triangle") {
-      let h = sz * 0.866;
-      triangle(
-        x,
-        barY - h / 2,
-        x - sz / 2,
-        barY + h / 2,
-        x + sz / 2,
-        barY + h / 2,
-      );
-    } else {
+    if (shapeType === "none") {
       stroke(colN);
       strokeWeight(2.5);
       noFill();
       line(x - sz / 2, barY, x + sz / 2, barY);
+    } else {
+      _drawPastShape(shapeType, x, barY, sz);
     }
   }
   pop();
+}
+
+function _drawPastShape(shapeType, x, y, sz) {
+  if (shapeType === "square") {
+    rect(x - sz / 2, y - sz / 2, sz, sz, 3);
+  } else if (shapeType === "triangle") {
+    let h = sz * 0.866;
+    triangle(x, y - h / 2, x - sz / 2, y + h / 2, x + sz / 2, y + h / 2);
+  } else if (shapeType === "circle") {
+    ellipse(x, y, sz, sz);
+  } else if (shapeType === "diamond") {
+    let hd = sz / 2;
+    quad(x, y - hd, x + hd, y, x, y + hd, x - hd, y);
+  }
 }
 
 function displayCurrentGuest(
@@ -1076,16 +937,16 @@ function drawFog() {
 
 function displayCompletion() {
   let sh = typeof getCurrentShift === "function" ? getCurrentShift() : null;
-  // Night shift is infinite — never shows a completion screen
-  if (sh && sh.id === "night") return;
+  if (!sh) return;
+  // Night completion is handled by the gameWon flag/drawGameWon() in sketch.js
+  if (sh.id === "night") return;
 
-  // Morning or afternoon: completion after their guest count
-  if (sh && sh.id === "morning" && submissions.length >= 5) {
+  if (sh.id === "morning" && submissions.length >= 6) {
     _drawCompletionCard(
       "Morning Shift Complete!",
       "Heading into the afternoon...",
     );
-  } else if (sh && sh.id === "afternoon" && submissions.length >= 8) {
+  } else if (sh.id === "afternoon" && submissions.length >= 14) {
     _drawCompletionCard("Afternoon Shift Done!", "Night shift awaits...");
   }
 }
