@@ -1,3 +1,12 @@
+// ── Sounds ─────────────────────────────────────────
+let bgm;
+let gateOpen;
+
+function preload() {
+  bgm = loadSound("sounds/BGM.mp3");
+  gateOpen = loadSound("sounds/gate_open.wav");
+}
+
 // ── Preset ritual sequences ─────────────────────────────────────────
 // 1=Check Ticket  2=Check License  3=Click Pen  4=Stamp Guest Log  5=Talk Into Speaker
 const RITUAL_SQUARE = [1, 3, 5, 2, 4]; // Check Ticket → Click Pen → Talk Into Speaker → Check License → Stamp Guest Log
@@ -282,6 +291,10 @@ function setup() {
   resetShiftTimer();
   initGameClock();
   lastFrameTime = millis();
+
+  bgm.setLoop(true);
+  bgm.setVolume(0.4);
+  bgm.play();
 }
 
 function refreshFrozenCar() {
