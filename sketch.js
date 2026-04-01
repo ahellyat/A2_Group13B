@@ -344,13 +344,15 @@ function updateCarAnim() {
 }
 
 function drawWeather() {
-  if (wrongCount === 0) drawSunny();
-  else if (wrongCount === 1) drawCloudy();
-  else if (wrongCount === 2) drawRain(1.0);
-  else {
+  if (wrongCount === 1) {
+    drawCloudy();
+  } else if (wrongCount === 2) {
+    drawRain(1.0);
+  } else if (wrongCount > 2) {
     drawRain(1.0);
     drawThunder();
   }
+  // wrongCount === 0 → do nothing
 }
 
 function drawCloudy() {
