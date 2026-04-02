@@ -3,8 +3,8 @@ let bgm;
 let gateOpen;
 
 function preload() {
-  bgm = loadSound("sounds/BGM.mp3");
-  gateOpen = loadSound("sounds/gate_open.wav");
+  bgm = loadSound("libraries/Assets/Sounds/BGM.mp3");
+  gateOpen = loadSound("libraries/Assets/Sounds/gate_open.wav");
 }
 
 // ── Preset ritual sequences ─────────────────────────────────────────
