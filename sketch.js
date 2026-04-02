@@ -1109,8 +1109,6 @@ function mousePressed() {
       if (wrongCount >= 4) {
         gameOver = true;
       }
-    } else if (wrongCount > 0) {
-      wrongCount = max(0, wrongCount - 1);
     }
 
     if (!gameOver) {
