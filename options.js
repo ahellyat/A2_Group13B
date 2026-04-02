@@ -34,6 +34,23 @@ const C_DISABLED = [160, 175, 190];
 const C_ACCENT = [220, 50, 50]; // red accent
 const C_GOLD = [200, 165, 60];
 
+// ─── Button display order (night-shift shuffle) ────────────────────
+let buttonDisplayOrder = [0, 1, 2, 3, 4];
+
+function shuffleButtonOrder() {
+  for (let i = buttonDisplayOrder.length - 1; i > 0; i--) {
+    let j = floor(random(i + 1));
+    [buttonDisplayOrder[i], buttonDisplayOrder[j]] = [
+      buttonDisplayOrder[j],
+      buttonDisplayOrder[i],
+    ];
+  }
+}
+
+function resetButtonOrder() {
+  buttonDisplayOrder = [0, 1, 2, 3, 4];
+}
+
 // ─── Training highlight pulse ──────────────────────────────────────
 // glowPhase increases every frame and drives a sin-wave pulse on the
 // highlighted button. Stored here so options.js owns it.
@@ -56,10 +73,13 @@ function bottommenu() {
   // Advance glow phase every frame
   trainingGlowPhase += 0.08;
 
-  // Which button should glow? (-1 = none)
-  let highlightIdx =
+  let highlightActionIdx =
     typeof getTrainingHighlightIndex === "function"
       ? getTrainingHighlightIndex()
+      : -1;
+  let highlightIdx =
+    highlightActionIdx >= 0
+      ? buttonDisplayOrder.indexOf(highlightActionIdx)
       : -1;
 
   // Panel background — dark booth counter
@@ -102,7 +122,8 @@ function bottommenu() {
       mouseY >= menuY &&
       mouseY <= menuY + menuH;
     let pres = hov && mouseIsPressed;
-    let dis = typeof disabled !== "undefined" && disabled[i];
+    let actionIdx = buttonDisplayOrder[i];
+    let dis = typeof disabled !== "undefined" && disabled[actionIdx];
 
     // Is this the training highlight button?
     let isHighlight = i === highlightIdx && !dis;
@@ -201,18 +222,18 @@ function bottommenu() {
     let iconX = bx + bw / 2;
     let iconY = by + bh * 0.4;
     let iconAlpha = dis ? 120 : 255;
-    drawMenuIcon(options[i].icon, iconX, iconY, dis, iconAlpha);
+    drawMenuIcon(options[actionIdx].icon, iconX, iconY, dis, iconAlpha);
 
     // Label
     fill(dis ? 100 : C_NAVY[0], dis ? 100 : C_NAVY[1], dis ? 100 : C_NAVY[2]);
     noStroke();
     textAlign(CENTER, CENTER);
     textSize(12);
-    text(options[i].label, iconX, by + bh * 0.76);
+    text(options[actionIdx].label, iconX, by + bh * 0.76);
 
     // Done tick when disabled — show order number badge
     if (dis) {
-      let orderNum = clickHistory.indexOf(i + 1) + 1;
+      let orderNum = clickHistory.indexOf(actionIdx + 1) + 1;
       let badgeCX = bx + bw - 12;
       let badgeCY = by + 12;
 
@@ -868,12 +889,13 @@ function bottomMenuMouseClicked() {
       mouseY >= sy &&
       mouseY <= sy + menuH
     ) {
-      if (!disabled[i]) {
-        disabled[i] = true;
-        clickHistory.push(i + 1);
+      let actionIdx = buttonDisplayOrder[i];
+      if (!disabled[actionIdx]) {
+        disabled[actionIdx] = true;
+        clickHistory.push(actionIdx + 1);
         console.log(clickHistory);
       }
-      currentOptionIndex = i;
+      currentOptionIndex = actionIdx;
       // Reset license scan state for a fresh open each time
       scanStartTime = -1;
       scanComplete = false;

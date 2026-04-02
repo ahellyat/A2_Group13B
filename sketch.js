@@ -144,9 +144,9 @@ function drawGameClock() {
   let sh = getCurrentShift();
   let isNight = sh.id === "night";
 
-  // Position: top-right, just below the past-customers legend
-  let cx = width - 52,
-    cy = 100,
+  // Position: top-left, centred under the shift badge (x=18,w=138,y=8,h=28)
+  let cx = 87,
+    cy = 92,
     r = 34;
 
   push();
@@ -314,6 +314,15 @@ function refreshFrozenCar() {
   frozenCarColor = sc ? color(sc[0], sc[1], sc[2]) : color(100, 110, 130);
   frozenGuestLabel = "Guest #" + (submissions.length + 1);
   frozenAnimalName = animalList[submissions.length % animalList.length];
+
+  if (typeof shuffleButtonOrder === "function") {
+    let sh = getCurrentShift();
+    if (sh && sh.id === "night") {
+      shuffleButtonOrder();
+    } else {
+      resetButtonOrder();
+    }
+  }
 }
 
 function draw() {
@@ -384,6 +393,7 @@ function _checkShiftAdvance() {
 }
 
 let pendingShiftTransition = false;
+let submissionsShiftStart = 0;
 
 function startTimerIfNeeded() {
   // Never start timer during training
@@ -427,6 +437,7 @@ function updateCarAnim() {
       // Fire shift transition if needed
       if (pendingShiftTransition) {
         pendingShiftTransition = false;
+        submissionsShiftStart = submissions.length;
         gameState = "stage";
         stageAutoStartMs = millis();
         stageAnimFrame = 0;
@@ -718,6 +729,7 @@ function runGame() {
     }
     displaySubmissionIndicators();
     drawPastCustomers();
+    drawRitualKey();
     drawTicketBooth(gateAngle);
     displayCurrentGuest(
       carAnimX,
@@ -727,21 +739,20 @@ function runGame() {
       frozenGuestLabel,
     );
 
-    // Draw timer and clock (only for non-training guests)
     if (!isTrainingGuest()) {
       drawShiftTimer();
       drawShiftBadge();
       drawGameClock();
     } else {
-      // Still draw shift badge during training
       drawShiftBadge();
+      drawGameClock();
       drawTrainingBadge();
     }
   }
 
+  drawGuidebookButton();
   drawFog();
   if (timerExpired && carState === "waiting") drawTimerExpiredOverlay();
-  drawGuidebookButton();
   if (showModal) drawModal();
   if (showGuidebook) drawGuidebook();
   if (gameWon) drawGameWon();

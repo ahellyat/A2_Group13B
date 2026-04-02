@@ -21,7 +21,7 @@ function drawRoad() {
 
 function drawMessage() {
   let message = "";
-  let yPos = height / 8;
+  let yPos = height / 8 + 40;
   let sh = typeof getCurrentShift === "function" ? getCurrentShift() : null;
 
   if (triedToOpenGateWithoutSubmission) {
@@ -34,7 +34,7 @@ function drawMessage() {
       "One down. Remember: each car badge tells me which ritual to use. Square = Ritual 1, Triangle = Ritual 2.";
   } else if (submissions.length === 2 && sh && sh.id === "morning") {
     message =
-      "Morning shift — 45 seconds per guest. Take a breath and follow the ritual carefully.";
+      "Morning shift — 60 seconds per guest. Take a breath and follow the ritual carefully.";
   } else if (submissions.length > 1 && wrongCount === 0) {
     message =
       "Looks like there's more guests waiting. Let me do the right routine for each of them.";
@@ -49,9 +49,9 @@ function drawMessage() {
   // Shift-specific pressure messages
   if (sh) {
     if (submissions.length >= 1 && sh.id === "afternoon" && message === "") {
-      message = "Afternoon rush — only 30 seconds per guest. Stay focused!";
+      message = "Afternoon rush — only 40 seconds per guest. Stay focused!";
     } else if (submissions.length >= 1 && sh.id === "night" && message === "") {
-      message = "Night shift... 20 seconds per guest. Don't slip up.";
+      message = "Night shift... 30 seconds per guest. Don't slip up.";
     }
   }
 
@@ -673,78 +673,184 @@ function drawTicketBooth(gateAngle) {
 }
 
 // ─────────────────────────────────────────────
-// Past customers bar
+// Past customers panel
 // ─────────────────────────────────────────────
 function drawPastCustomers() {
-  if (submissions.length === 0) return;
-  let sz = 22, pad = 12, barY = 28;
-  let startX = width / 2 - (submissions.length * (sz + pad)) / 2;
+  let shiftStart = typeof submissionsShiftStart !== "undefined"
+    ? submissionsShiftStart : 0;
+  let shiftTotal = submissions.length - shiftStart;
+  if (shiftTotal <= 0) return;
 
-  let col1 = color(40,  120, 220);
-  let col2 = color(220,  60,  60);
-  let col3 = color(220, 130,  30);
-  let col4 = color(140,  50, 200);
-  let colN = color(180, 180, 180);
+  let sh      = typeof getCurrentShift === "function" ? getCurrentShift() : null;
+  let isNight = sh && sh.id === "night";
+
+  let pW = 540, pH = 66;
+  let pX = width / 2 - pW / 2, pY = 8;
+
+  let contentW = pW - 24;
+  let MAX_VIS  = floor((contentW + 6) / 26);
+  let sz = 20, gap = 6;
+  let showCount = min(shiftTotal, MAX_VIS);
+  let startIdx  = shiftStart + (shiftTotal - showCount);
+  let hasMore   = shiftTotal > MAX_VIS;
 
   push();
 
-  // ── Legend (top-right) ──
-  let lx = width - 168, ly = 8;
   noStroke();
+  fill(0, 0, 0, 55);
+  rect(pX + 4, pY + 6, pW, pH, 8);
 
-  // Square
-  fill(col1); rect(lx, ly,      10, 10, 2);
-  fill(60);   textAlign(LEFT, TOP); textSize(10); text("— ritual 1", lx + 14, ly);
-  // Triangle
-  fill(col2); triangle(lx+5, ly+16, lx, ly+26, lx+10, ly+26);
-  fill(60);   text("— ritual 2", lx + 14, ly + 16);
-  // Circle
-  fill(col3); ellipse(lx + 5, ly + 37, 10, 10);
-  fill(60);   text("— ritual 3", lx + 14, ly + 32);
-  // Diamond
-  fill(col4); quad(lx+5, ly+46, lx+10, ly+51, lx+5, ly+56, lx, ly+51);
-  fill(60);   text("— ritual 4", lx + 14, ly + 48);
-  // None
-  stroke(140); strokeWeight(1.5);
-  line(lx, ly + 68, lx + 10, ly + 68);
   noStroke();
-  fill(60);   text("— anything", lx + 14, ly + 64);
+  fill(isNight ? color(10, 16, 42) : color(18, 34, 54));
+  rect(pX - 4, pY - 4, pW + 8, pH + 8, 9);
 
-  // ── Past customer shapes ──
+  fill(isNight ? color(22, 34, 74) : color(28, 48, 72));
   noStroke();
-  fill(13, 67, 102, 160);
-  textAlign(RIGHT, CENTER);
-  textSize(11);
-  text("past customers", startX - 10, barY);
+  rect(pX, pY, pW, pH, 6);
 
-  for (let i = 0; i < submissions.length; i++) {
-    let x = startX + i * (sz + pad) + sz / 2;
-    let shapeType = shapeArray[i % shapeArray.length];
-    let col =
-      shapeType === "square"   ? col1 :
-      shapeType === "triangle" ? col2 :
-      shapeType === "circle"   ? col3 :
-      shapeType === "diamond"  ? col4 : colN;
-
-    if (shapeType !== "none") {
-      // Shadow
-      noStroke();
-      fill(0, 0, 0, 30);
-      _drawPastShape(shapeType, x + 2, barY + 2, sz);
-    }
-
-    fill(col);
-    stroke(0);
-    strokeWeight(1.2);
-    if (shapeType === "none") {
-      stroke(colN);
-      strokeWeight(2.5);
-      noFill();
-      line(x - sz / 2, barY, x + sz / 2, barY);
-    } else {
-      _drawPastShape(shapeType, x, barY, sz);
+  fill(200, 165, 60);
+  noStroke();
+  for (let rx of [pX + 10, pX + pW - 10]) {
+    for (let ry of [pY + 10, pY + pH - 10]) {
+      ellipse(rx, ry, 7, 7);
     }
   }
+
+  fill(200, 165, 60, 200);
+  noStroke();
+  rect(pX + 4, pY + 4, pW - 8, 20, 3);
+
+  fill(isNight ? color(10, 16, 42) : color(18, 34, 54));
+  textAlign(RIGHT, CENTER);
+  textFont("sans-serif");
+  textSize(10);
+  text(shiftTotal + " served", pX + pW - 14, pY + 14);
+  textAlign(CENTER, CENTER);
+  text("★  PAST GUESTS THIS SHIFT  ★", pX + pW / 2, pY + 14);
+
+  let barY     = pY + 28 + (pH - 28) / 2;
+  let totalW   = showCount * (sz + gap) - gap;
+  let ellW     = hasMore ? 18 : 0;
+  let rowStart = pX + 14 + ellW + (contentW - ellW - totalW) / 2;
+
+  if (hasMore) {
+    noStroke();
+    fill(200, 165, 60, 190);
+    textAlign(LEFT, CENTER);
+    textFont("sans-serif");
+    textSize(14);
+    text("…", pX + 14, barY - 1);
+  }
+
+  for (let i = 0; i < showCount; i++) {
+    let idx       = startIdx + i;
+    let cx        = rowStart + i * (sz + gap) + sz / 2;
+    let shapeType = shapeArray[idx % shapeArray.length];
+    let sc        = typeof SHAPE_COLORS !== "undefined" ? SHAPE_COLORS[shapeType] : null;
+    let col       = sc ? color(sc[0], sc[1], sc[2]) : color(160, 170, 180);
+
+    if (shapeType === "none") {
+      noFill();
+      stroke(isNight ? color(180, 195, 245, 190) : color(200, 165, 60, 210));
+      strokeWeight(2.2);
+      line(cx - sz / 2 + 3, barY, cx + sz / 2 - 3, barY);
+    } else {
+      noStroke();
+      fill(0, 0, 0, 45);
+      _drawPastShape(shapeType, cx + 1, barY + 1, sz);
+      fill(col);
+      stroke(255, 255, 255, 45);
+      strokeWeight(1);
+      _drawPastShape(shapeType, cx, barY, sz);
+    }
+  }
+
+  pop();
+}
+
+// ─────────────────────────────────────────────
+// Ritual key panel — sits to the right of the past customers panel
+// ─────────────────────────────────────────────
+function drawRitualKey() {
+  let sh      = typeof getCurrentShift === "function" ? getCurrentShift() : null;
+  if (!sh) return;
+  let isNight = sh.id === "night";
+
+  let shapes = (sh.id === "afternoon" || sh.id === "night")
+    ? ["square", "triangle", "circle", "diamond"]
+    : ["square", "triangle"];
+
+  let slotW  = 42;
+  let sidePad = 10;
+  let pW = shapes.length * slotW + sidePad * 2;
+  let pH = 66;
+  let pX = width / 2 + 270 + 10;
+  let pY = 8;
+
+  push();
+
+  noStroke();
+  fill(0, 0, 0, 55);
+  rect(pX + 4, pY + 6, pW, pH, 8);
+
+  noStroke();
+  fill(isNight ? color(10, 16, 42) : color(18, 34, 54));
+  rect(pX - 4, pY - 4, pW + 8, pH + 8, 9);
+
+  fill(isNight ? color(22, 34, 74) : color(28, 48, 72));
+  noStroke();
+  rect(pX, pY, pW, pH, 6);
+
+  fill(200, 165, 60);
+  noStroke();
+  for (let rx of [pX + 9, pX + pW - 9]) {
+    for (let ry of [pY + 9, pY + pH - 9]) {
+      ellipse(rx, ry, 6, 6);
+    }
+  }
+
+  fill(200, 165, 60, 200);
+  noStroke();
+  rect(pX + 4, pY + 4, pW - 8, 20, 3);
+
+  fill(isNight ? color(10, 16, 42) : color(18, 34, 54));
+  textAlign(CENTER, CENTER);
+  textFont("sans-serif");
+  textSize(9);
+  text("★  RITUAL KEY  ★", pX + pW / 2, pY + 14);
+
+  let iconY  = pY + 38;
+  let numY   = pY + 56;
+  let iconSz = 15;
+
+  for (let i = 0; i < shapes.length; i++) {
+    let s   = shapes[i];
+    let sc  = SHAPE_COLORS[s];
+    let col = color(sc[0], sc[1], sc[2]);
+    let cx  = pX + sidePad + i * slotW + slotW / 2;
+
+    if (i > 0) {
+      stroke(200, 165, 60, 35);
+      strokeWeight(1);
+      line(pX + sidePad + i * slotW, pY + 26, pX + sidePad + i * slotW, pY + pH - 8);
+    }
+
+    noStroke();
+    fill(0, 0, 0, 40);
+    _drawPastShape(s, cx + 1, iconY + 1, iconSz);
+    fill(col);
+    stroke(255, 255, 255, 45);
+    strokeWeight(0.8);
+    _drawPastShape(s, cx, iconY, iconSz);
+
+    noStroke();
+    fill(isNight ? color(200, 212, 255) : color(220, 235, 255));
+    textAlign(CENTER, CENTER);
+    textFont("Georgia, serif");
+    textSize(11);
+    text(i + 1, cx, numY);
+  }
+
   pop();
 }
 
