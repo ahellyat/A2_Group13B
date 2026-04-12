@@ -18,11 +18,6 @@ let speakerWaveFrame = 0;
 let speakerX, speakerY, speakerW, speakerH;
 let speakerButtonX, speakerButtonY, speakerButtonW, speakerButtonH;
 
-// ── License scan state ─────────────────────────────────────────────
-let scanStartTime = -1; // millis() when scan began (-1 = not started)
-let scanComplete = false; // true once the 5-second scan finishes
-const SCAN_DURATION = 3000; // ms
-
 // ─── Colour palette ───────────────────────────────────────────────
 const C_NAVY = [13, 67, 102];
 const C_PANEL = [28, 48, 72]; // dark booth panel
@@ -33,11 +28,6 @@ const C_BTNPRESS = [180, 200, 220];
 const C_DISABLED = [160, 175, 190];
 const C_ACCENT = [220, 50, 50]; // red accent
 const C_GOLD = [200, 165, 60];
-
-// ─── Training highlight pulse ──────────────────────────────────────
-// glowPhase increases every frame and drives a sin-wave pulse on the
-// highlighted button. Stored here so options.js owns it.
-let trainingGlowPhase = 0;
 
 function drawOptions() {
   bottommenu();
@@ -52,15 +42,6 @@ function bottommenu() {
   let btnW = menuW / 5;
   let btnH = 160;
   let btnY = menuY + (menuH - btnH) / 2;
-
-  // Advance glow phase every frame
-  trainingGlowPhase += 0.08;
-
-  // Which button should glow? (-1 = none)
-  let highlightIdx =
-    typeof getTrainingHighlightIndex === "function"
-      ? getTrainingHighlightIndex()
-      : -1;
 
   // Panel background — dark booth counter
   push();
@@ -104,30 +85,7 @@ function bottommenu() {
     let pres = hov && mouseIsPressed;
     let dis = typeof disabled !== "undefined" && disabled[i];
 
-    // Is this the training highlight button?
-    let isHighlight = i === highlightIdx && !dis;
-    let glowAmt = isHighlight ? sin(trainingGlowPhase) * 0.5 + 0.5 : 0; // 0..1
-
     push();
-
-    // ── Training highlight: outer glow rings ──────────────────────
-    if (isHighlight) {
-      // Three expanding rings with decreasing opacity
-      noFill();
-      for (let ring = 0; ring < 3; ring++) {
-        let ringAlpha = map(glowAmt, 0, 1, 20, 90) - ring * 22;
-        let expand = ring * 6 + glowAmt * 8;
-        stroke(60, 220, 120, ringAlpha);
-        strokeWeight(3 - ring * 0.8);
-        rect(
-          bx - expand,
-          by - expand,
-          bw + expand * 2,
-          bh + expand * 2,
-          10 + expand,
-        );
-      }
-    }
 
     // Button shadow
     noStroke();
@@ -137,12 +95,6 @@ function bottommenu() {
     // Button face
     if (dis) {
       fill(C_DISABLED[0], C_DISABLED[1], C_DISABLED[2]);
-    } else if (isHighlight) {
-      // Blend between normal and a bright green-tinted face
-      let r = lerp(C_BTNBG[0], 220, glowAmt * 0.35);
-      let g = lerp(C_BTNBG[1], 255, glowAmt * 0.45);
-      let b2 = lerp(C_BTNBG[2], 220, glowAmt * 0.25);
-      fill(r, g, b2);
     } else if (pres) {
       fill(C_BTNPRESS[0], C_BTNPRESS[1], C_BTNPRESS[2]);
     } else if (hov) {
@@ -151,51 +103,17 @@ function bottommenu() {
       fill(C_BTNBG[0], C_BTNBG[1], C_BTNBG[2]);
     }
     stroke(C_NAVY[0], C_NAVY[1], C_NAVY[2]);
-    strokeWeight(isHighlight ? 2.5 : 1.5);
-    if (isHighlight) {
-      // Green border on highlight
-      let borderAlpha = map(glowAmt, 0, 1, 160, 255);
-      stroke(40, 200, 90, borderAlpha);
-    }
+    strokeWeight(1.5);
     rect(bx, by, bw, bh, 8);
 
     // Top accent bar
     noStroke();
     if (dis) {
       fill(120, 140, 160);
-    } else if (isHighlight) {
-      fill(40, map(glowAmt, 0, 1, 160, 220), 90, 255);
     } else {
       fill(C_NAVY[0], C_NAVY[1], C_NAVY[2]);
     }
     rect(bx + 1, by + 1, bw - 2, 6, 8, 8, 0, 0);
-
-    // ── Highlight: step number badge (top-left of button) ─────────
-    if (isHighlight && typeof getTrainingHighlightIndex === "function") {
-      // Work out what step number this is
-      let shapeIndex = submissions.length % shapeArray.length;
-      let shape = shapeArray[shapeIndex];
-      let ritual = getRitualForShape(shape);
-      let stepNum = clickHistory.length + 1; // 1-based next step
-
-      let badgePulse = map(glowAmt, 0, 1, 180, 255);
-      noStroke();
-      fill(40, 200, 90, badgePulse);
-      ellipse(bx + 16, by + 16, 26, 26);
-      fill(255);
-      textAlign(CENTER, CENTER);
-      textFont("sans-serif");
-      textStyle(BOLD);
-      textSize(12);
-      text(stepNum, bx + 16, by + 17);
-      textStyle(NORMAL);
-
-      // "NEXT" label under the step badge
-      fill(40, 200, 90, map(glowAmt, 0, 1, 120, 200));
-      textFont("sans-serif");
-      textSize(7);
-      text("NEXT", bx + 16, by + 30);
-    }
 
     // Icon
     let iconX = bx + bw / 2;
@@ -210,7 +128,8 @@ function bottommenu() {
     textSize(12);
     text(options[i].label, iconX, by + bh * 0.76);
 
-    // Done tick when disabled — show order number badge
+    // Done tick when disabled
+    // Order number badge when disabled
     if (dis) {
       let orderNum = clickHistory.indexOf(i + 1) + 1;
       let badgeCX = bx + bw - 12;
@@ -416,14 +335,6 @@ function drawModal() {
       fh = mh * 0.52;
     let fx = mx + (mw - fw) / 2,
       fy = my + 62;
-
-    // Start scan timer the first time this modal is drawn
-    if (scanStartTime < 0) scanStartTime = millis();
-
-    let elapsed = millis() - scanStartTime;
-    let progress = constrain(elapsed / SCAN_DURATION, 0, 1);
-    if (elapsed >= SCAN_DURATION) scanComplete = true;
-
     // Camera viewfinder frame
     stroke(C_NAVY[0], C_NAVY[1], C_NAVY[2]);
     strokeWeight(2.5);
@@ -441,7 +352,6 @@ function drawModal() {
       line(bx2, by2, bx2 + sx * blen, by2);
       line(bx2, by2, bx2, by2 + sy * blen);
     }
-
     // Plate
     let pw = fw * 0.68,
       ph = fh * 0.38;
@@ -460,64 +370,21 @@ function drawModal() {
     fill(150);
     ellipse(px + 10, py + ph / 2, 6, 6);
     ellipse(px + pw - 10, py + ph / 2, 6, 6);
-
-    if (!scanComplete) {
-      // Animated scan line sweeping over plate
-      let scanY = py + (frameCount % ph);
-      stroke(255, 60, 60, 200);
-      strokeWeight(2);
-      line(px + 4, scanY, px + pw - 4, scanY);
-      noStroke();
-      fill(255, 60, 60, 30);
-      rect(px + 4, scanY - 4, pw - 8, 8);
-
-      // Progress bar
-      let barX = fx,
-        barY = fy + fh + 14,
-        barW = fw,
-        barH = 10;
-      noStroke();
-      fill(200, 215, 230);
-      rect(barX, barY, barW, barH, 5);
-      fill(C_NAVY[0], C_NAVY[1], C_NAVY[2]);
-      rect(barX, barY, barW * progress, barH, 5);
-      // Pulsing leading dot
-      fill(200, 165, 60, 200);
-      ellipse(barX + barW * progress, barY + barH / 2, 12, 12);
-
-      // Label with countdown
-      let secsLeft = ceil((SCAN_DURATION - elapsed) / 1000);
-      fill(C_NAVY[0], C_NAVY[1], C_NAVY[2]);
-      noStroke();
-      textAlign(CENTER, TOP);
-      textSize(14);
-      text("Scanning plate… " + secsLeft + "s", fx + fw / 2, fy + fh + 30);
-    } else {
-      // ── Scan complete state ──
-      // Green success overlay on the viewfinder
-      noStroke();
-      fill(40, 180, 80, 28);
-      rect(fx, fy, fw, fh, 10);
-
-      // Green tick mark in centre of viewfinder
-      let tickCX = fx + fw / 2,
-        tickCY = fy + fh / 2 - 6;
-      stroke(40, 180, 80);
-      strokeWeight(5);
-      noFill();
-      line(tickCX - 22, tickCY, tickCX - 6, tickCY + 18);
-      line(tickCX - 6, tickCY + 18, tickCX + 26, tickCY - 14);
-
-      // "SCAN COMPLETE" banner
-      let bannerY = fy + fh + 12;
-      noStroke();
-      fill(40, 180, 80, 220);
-      rect(fx, bannerY, fw, 28, 6);
-      fill(255);
-      textAlign(CENTER, CENTER);
-      textSize(15);
-      text("✓  SCAN COMPLETE", fx + fw / 2, bannerY + 14);
-    }
+    // Scan line
+    let scanY = py + (frameCount % ph);
+    stroke(255, 60, 60, 200);
+    strokeWeight(2);
+    line(px + 4, scanY, px + pw - 4, scanY);
+    // Glow
+    noStroke();
+    fill(255, 60, 60, 30);
+    rect(px + 4, scanY - 4, pw - 8, 8);
+    // Label
+    fill(C_NAVY[0], C_NAVY[1], C_NAVY[2]);
+    noStroke();
+    textAlign(CENTER, TOP);
+    textSize(14);
+    text("Scanning plate…", fx + fw / 2, fy + fh + 12);
   }
 
   // ── Click Pen ─────────────────────────────────────────────────
@@ -759,36 +626,20 @@ function drawModal() {
   }
 
   // ── Close button ──────────────────────────────────────────────
-  // Locked while a license scan is in progress
-  let scanBlocking = currentOptionIndex === 1 && !scanComplete;
   let chov =
-    !scanBlocking &&
     mouseX >= closeX &&
     mouseX <= closeX + closeW &&
     mouseY >= closeY &&
     mouseY <= closeY + closeH;
-  if (scanBlocking) {
-    fill(C_DISABLED[0], C_DISABLED[1], C_DISABLED[2]);
-    stroke(140, 155, 170);
-  } else {
-    fill(chov ? [247, 247, 205] : [220, 230, 245]);
-    stroke(C_NAVY[0], C_NAVY[1], C_NAVY[2]);
-  }
+  fill(chov ? [247, 247, 205] : [220, 230, 245]);
+  stroke(C_NAVY[0], C_NAVY[1], C_NAVY[2]);
   strokeWeight(1.5);
   rect(closeX, closeY, closeW, closeH, 6);
   noStroke();
-  fill(
-    scanBlocking ? 120 : C_NAVY[0],
-    scanBlocking ? 120 : C_NAVY[1],
-    scanBlocking ? 120 : C_NAVY[2],
-  );
+  fill(C_NAVY[0], C_NAVY[1], C_NAVY[2]);
   textAlign(CENTER, CENTER);
   textSize(14);
-  text(
-    scanBlocking ? "⏳ Wait…" : "✕  Close",
-    closeX + closeW / 2,
-    closeY + closeH / 2,
-  );
+  text("✕  Close", closeX + closeW / 2, closeY + closeH / 2);
 
   pop();
 }
@@ -836,8 +687,6 @@ function modalMouseClicked() {
       mouseY >= closeY &&
       mouseY <= closeY + closeH
     ) {
-      // Don't allow closing while license scan is still running
-      if (currentOptionIndex === 1 && !scanComplete) return;
       showModal = false;
     }
     return;
@@ -846,9 +695,6 @@ function modalMouseClicked() {
     logStamped = false;
     penExtended = false;
     speakerTalking = false;
-    // Reset scan state so next time the modal opens it starts fresh
-    scanStartTime = -1;
-    scanComplete = false;
   }
 }
 
@@ -874,9 +720,6 @@ function bottomMenuMouseClicked() {
         console.log(clickHistory);
       }
       currentOptionIndex = i;
-      // Reset license scan state for a fresh open each time
-      scanStartTime = -1;
-      scanComplete = false;
       showModal = true;
       return;
     }

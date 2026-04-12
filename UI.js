@@ -22,37 +22,24 @@ function drawRoad() {
 function drawMessage() {
   let message = "";
   let yPos = height / 8;
-  let sh = typeof getCurrentShift === "function" ? getCurrentShift() : null;
 
   if (triedToOpenGateWithoutSubmission) {
     message = "I can't let anyone in yet! I didn't do the steps I need to do.";
   } else if (submissions.length < 1) {
     message =
-      "My first guest is here. I need to follow the correct ritual order — check the Guidebook if I forget!";
+      "Looks like my first guest is here. My manager said I have to choose the right order of doing things.";
   } else if (submissions.length === 1) {
     message =
-      "One down. Remember: each car badge tells me which ritual to use. Square = Ritual 1, Triangle = Ritual 2.";
-  } else if (submissions.length === 2 && sh && sh.id === "morning") {
-    message =
-      "Morning shift — 45 seconds per guest. Take a breath and follow the ritual carefully.";
+      "That felt like the right routine to handle guests with square licenses. How about the triangle ones?\nLet me decide a new order.";
   } else if (submissions.length > 1 && wrongCount === 0) {
     message =
-      "Looks like there's more guests waiting. Let me do the right routine for each of them.";
+      "Looks like there's a couple more guests waiting to get in. Let me do the right routine for each of them.";
   } else if (submissions.length > 1 && wrongCount > 0 && !isMatch) {
     message =
-      "Oh no. That felt wrong. Check the Guidebook and make sure I'm following the correct order!";
+      "Oh no. That felt wrong. I have to make sure I'm serving them properly.\nLet me try doing the right shape routine again";
   } else if (submissions.length > 1 && wrongCount > 0 && isMatch) {
     message =
       "Phew! I'm setting things right. Now my guests will be happy again!\nLet's keep going.";
-  }
-
-  // Shift-specific pressure messages
-  if (sh) {
-    if (submissions.length >= 1 && sh.id === "afternoon" && message === "") {
-      message = "Afternoon rush — only 30 seconds per guest. Stay focused!";
-    } else if (submissions.length >= 1 && sh.id === "night" && message === "") {
-      message = "Night shift... 20 seconds per guest. Don't slip up.";
-    }
   }
 
   if (message === "") return;
@@ -84,10 +71,13 @@ function submitButton() {
   let pressed = hovered && mouseIsPressed;
 
   push();
+
+  // Drop shadow
   noStroke();
   fill(0, 0, 0, 35);
   rect(bX + 4, bY + 5, bW, bH, 10);
 
+  // Button face — matches booth panel style
   if (pressed) fill(180, 200, 220);
   else if (hovered) fill(247, 247, 205);
   else fill(240, 248, 255);
@@ -95,13 +85,16 @@ function submitButton() {
   strokeWeight(1.8);
   rect(bX, bY, bW, bH, 10);
 
+  // Top accent bar (gold on hover, navy otherwise)
   noStroke();
   fill(hovered ? color(200, 165, 60) : color(13, 67, 102));
   rect(bX + 1, bY + 1, bW - 2, 7, 10, 10, 0, 0);
 
+  // Bottom accent bar
   fill(hovered ? color(200, 165, 60) : color(13, 67, 102));
   rect(bX + 1, bY + bH - 8, bW - 2, 7, 0, 0, 10, 10);
 
+  // Centred label — wraps to fit inside button width
   fill(13, 67, 102);
   noStroke();
   textAlign(CENTER, CENTER);
@@ -117,7 +110,7 @@ function displayShapes() {
   /* shapes on cars only */
 }
 function displaySubmissionIndicators() {
-  /* guest log removed */
+  /* guest log removed   */
 }
 
 // ─────────────────────────────────────────────
@@ -345,43 +338,59 @@ function drawAnimalOnCar(animalName, carX, carTopY) {
 }
 
 function drawCar(carX, carColor, shape, animalName, guestLabel) {
-  let bodyW = 260,
-    bodyH = 58,
-    cabinW = 155,
-    cabinH = 55;
-  let bBot = roadY,
-    bTop = bBot - bodyH;
-  let bL = carX - bodyW / 2,
-    bR = carX + bodyW / 2;
-  let cabL = carX - cabinW / 2 - 10;
+  // ── Dimensions ──
+  let bodyW = 260;
+  let bodyH = 58;
+  let cabinW = 155;
+  let cabinH = 55;
+
+  let bBot = roadY;
+  let bTop = bBot - bodyH;
+  let bL = carX - bodyW / 2;
+  let bR = carX + bodyW / 2;
+  let cabL = carX - cabinW / 2 - 10; // cabin offset slightly rearward
   let cabR = cabL + cabinW;
   let cabTop = bTop - cabinH;
-  let wR = 26,
-    wFX = bR - 52,
-    wBX = bL + 52,
-    wY = bBot + 4;
+
+  // Wheel positions
+  let wR = 26;
+  let wFX = bR - 52;
+  let wBX = bL + 52;
+  let wY = bBot + 4; // slightly embedded in road
+
+  // Centre of body for badge
   let bodyCenterY = bTop + bodyH / 2;
 
   push();
+
+  // ── Ground shadow ──
   noStroke();
   fill(0, 0, 0, 30);
   ellipse(carX, bBot + 10, bodyW * 0.9, 14);
+
+  // ── Rear bumper ──
   fill(lerpColor(carColor, color(20), 0.3));
   stroke(0);
   strokeWeight(1.2);
   rect(bL - 6, bBot - 18, 8, 14, 2);
+
+  // ── Front bumper ──
   rect(bR - 2, bBot - 18, 8, 14, 2);
+
+  // ── Body ──
   fill(carColor);
   stroke(0);
   strokeWeight(1.8);
   beginShape();
-  vertex(bL + 6, bBot);
-  vertex(bR - 6, bBot);
-  vertex(bR + 4, bTop + 14);
-  vertex(bR - 2, bTop);
-  vertex(bL + 2, bTop);
-  vertex(bL - 4, bTop + 14);
+  vertex(bL + 6, bBot); // rear bottom
+  vertex(bR - 6, bBot); // front bottom
+  vertex(bR + 4, bTop + 14); // front taper
+  vertex(bR - 2, bTop); // front top
+  vertex(bL + 2, bTop); // rear top
+  vertex(bL - 4, bTop + 14); // rear taper
   endShape(CLOSE);
+
+  // ── Body sheen (top highlight strip) ──
   noStroke();
   fill(255, 255, 255, 30);
   beginShape();
@@ -390,23 +399,31 @@ function drawCar(carX, carColor, shape, animalName, guestLabel) {
   vertex(bR - 6, bTop + 12);
   vertex(bL + 6, bTop + 12);
   endShape(CLOSE);
+
+  // ── Door seam ──
   stroke(0, 0, 0, 55);
   strokeWeight(1.2);
   line(carX, bTop + 4, carX, bBot - 2);
+
+  // ── Door handles ──
   stroke(0, 0, 0, 100);
   strokeWeight(2);
   line(carX - 40, bTop + bodyH * 0.55, carX - 22, bTop + bodyH * 0.55);
   line(carX + 16, bTop + bodyH * 0.55, carX + 34, bTop + bodyH * 0.55);
+
+  // ── Cabin shell ──
   let roofColor = lerpColor(carColor, color(10), 0.2);
   fill(roofColor);
   stroke(0);
   strokeWeight(1.8);
   beginShape();
-  vertex(cabL, bTop);
-  vertex(cabL + 12, cabTop + 8);
-  vertex(cabR - 8, cabTop);
-  vertex(cabR, bTop);
+  vertex(cabL, bTop); // A-pillar base (rear)
+  vertex(cabL + 12, cabTop + 8); // A-pillar top
+  vertex(cabR - 8, cabTop); // roof front corner
+  vertex(cabR, bTop); // C-pillar base (front)
   endShape(CLOSE);
+
+  // ── Windscreen glass ──
   fill(170, 215, 255, 175);
   stroke(0);
   strokeWeight(1);
@@ -416,6 +433,8 @@ function drawCar(carX, carColor, shape, animalName, guestLabel) {
   vertex(cabR - 18, cabTop + 4);
   vertex(cabR - 8, cabTop);
   endShape(CLOSE);
+
+  // ── Rear glass ──
   fill(170, 215, 255, 175);
   beginShape();
   vertex(cabL, bTop);
@@ -423,17 +442,21 @@ function drawCar(carX, carColor, shape, animalName, guestLabel) {
   vertex(cabL + 20, cabTop + 10);
   vertex(cabL + 12, cabTop + 8);
   endShape(CLOSE);
-  let winX = cabL + 14,
-    winY = cabTop + 10,
-    winW = cabinW - 26,
-    winH = bTop - winY - 4;
+
+  // ── Side window dimensions ──
+  let winX = cabL + 14;
+  let winY = cabTop + 10;
+  let winW = cabinW - 26;
+  let winH = bTop - winY - 4;
+
+  // ── Animal clipped inside window (drawn BEFORE glass so it sits behind it) ──
   push();
   drawingContext.save();
   drawingContext.beginPath();
   drawingContext.rect(winX + 2, winY + 2, winW - 4, winH - 4);
   drawingContext.clip();
-  let anCX = winX + winW * 0.42,
-    anCY = winY + winH * 0.72;
+  let anCX = winX + winW * 0.42;
+  let anCY = winY + winH * 0.72;
   if (animalName === "dog") drawDog(anCX, anCY);
   else if (animalName === "cat") drawCat(anCX, anCY);
   else if (animalName === "bear") drawBear(anCX, anCY);
@@ -441,27 +464,40 @@ function drawCar(carX, carColor, shape, animalName, guestLabel) {
   else if (animalName === "rabbit") drawRabbit(anCX, anCY);
   drawingContext.restore();
   pop();
+
+  // ── Side window glass (on top of animal, giving behind-glass effect) ──
   fill(170, 215, 255, 130);
   stroke(0);
   strokeWeight(1);
   rect(winX, winY, winW, winH, 4);
+  // Glass glint
   noStroke();
   fill(255, 255, 255, 60);
   rect(winX + 4, winY + 3, winW * 0.25, winH - 6, 2);
+
+  // ── B-pillar ──
   stroke(lerpColor(carColor, color(10), 0.3));
   strokeWeight(4);
   line(carX - 8, bTop, carX - 8, winY + 3);
+
+  // ── Headlights (front = right) ──
+  // Housing
   fill(lerpColor(carColor, color(30), 0.35));
   stroke(0);
   strokeWeight(1);
   rect(bR - 2, bTop + 10, 8, 22, 2);
+  // Main lens
   fill(255, 255, 190);
   noStroke();
   rect(bR - 1, bTop + 12, 5, 9, 1);
+  // DRL
   fill(255, 235, 140);
   rect(bR - 1, bTop + 23, 5, 4, 1);
+  // Glint
   fill(255, 255, 255, 210);
   ellipse(bR + 1, bTop + 15, 3, 2);
+
+  // ── Tail lights (rear = left) ──
   fill(lerpColor(carColor, color(30), 0.35));
   stroke(0);
   strokeWeight(1);
@@ -471,121 +507,145 @@ function drawCar(carX, carColor, shape, animalName, guestLabel) {
   rect(bL - 5, bTop + 12, 5, 9, 1);
   fill(200, 130, 0);
   rect(bL - 5, bTop + 23, 5, 4, 1);
+
+  // ── Wheels ──
   for (let wx of [wFX, wBX]) {
+    // Tyre
     fill(22, 22, 22);
     stroke(0);
     strokeWeight(1.5);
     ellipse(wx, wY, wR * 2, wR * 2);
+    // Tyre inner
     fill(38, 38, 38);
     noStroke();
     ellipse(wx, wY, wR * 1.65, wR * 1.65);
+    // Alloy rim
     fill(205, 210, 220);
     stroke(120);
     strokeWeight(0.8);
     ellipse(wx, wY, wR * 1.2, wR * 1.2);
+    // Rim inner ring (clean, no spokes)
     stroke(170, 175, 185);
     strokeWeight(1);
     noFill();
     ellipse(wx, wY, wR * 0.7, wR * 0.7);
+    // Centre cap
     fill(225, 228, 235);
     noStroke();
     ellipse(wx, wY, wR * 0.28, wR * 0.28);
   }
+
+  // ── Wheel arch shadows ──
   fill(40, 42, 46);
   noStroke();
   arc(wFX, bBot + 2, wR * 2 + 12, wR * 2 + 12, PI * 0.85, PI * 1.0);
   arc(wBX, bBot + 2, wR * 2 + 12, wR * 2 + 12, PI * 0.85, PI * 1.0);
+
+  // ── Shape badge — hidden when shape is "none" ──
   if (shape !== "none") {
     let size = 44;
-    // White badge background
     fill(255);
     stroke(0);
     strokeWeight(2);
-    rect(carX - size / 2 - 3, bodyCenterY - size / 2 - 3, size + 6, size + 6, 5);
-    // Coloured shape inside badge
-    let sc = typeof SHAPE_COLORS !== "undefined" ? SHAPE_COLORS[shape] : null;
-    if (sc) fill(sc[0], sc[1], sc[2]);
-    else fill(100, 110, 130);
-    noStroke();
     if (shape === "square") {
       rect(carX - size / 2, bodyCenterY - size / 2, size, size, 3);
-    } else if (shape === "triangle") {
+    } else {
       let h = size * 0.866;
       triangle(
-        carX, bodyCenterY - h / 2,
-        carX - size / 2, bodyCenterY + h / 2,
-        carX + size / 2, bodyCenterY + h / 2,
+        carX,
+        bodyCenterY - h / 2,
+        carX - size / 2,
+        bodyCenterY + h / 2,
+        carX + size / 2,
+        bodyCenterY + h / 2,
       );
-    } else if (shape === "circle") {
-      ellipse(carX, bodyCenterY, size, size);
-    } else if (shape === "diamond") {
-      let hd = size / 2;
-      quad(carX,        bodyCenterY - hd,
-           carX + hd,   bodyCenterY,
-           carX,        bodyCenterY + hd,
-           carX - hd,   bodyCenterY);
     }
   }
+
   pop();
 }
 
 // ─────────────────────────────────────────────
-// Ticket booth
+// Ticket booth (drawn to the right of centre)
 // ─────────────────────────────────────────────
 function drawTicketBooth(gateAngle) {
-  let bX = width * 0.72;
-  let bFloor = roadY;
-  let bW = 90,
-    bH = 130;
+  let bX = width * 0.72; // booth centre X — right of car
+  let bFloor = roadY; // sits on road surface
+
+  // Booth proportions
+  let bW = 90;
+  let bH = 130;
   let bTop = bFloor - bH;
-  let bL = bX - bW / 2,
-    bR = bX + bW / 2;
-  let roofW = bW + 28,
-    roofH = 18;
+  let bL = bX - bW / 2;
+  let bR = bX + bW / 2;
+
+  // Roof overhang
+  let roofW = bW + 28;
+  let roofH = 18;
   let roofL = bX - roofW / 2;
 
   push();
+
+  // ── Shadow ──
   noStroke();
   fill(0, 0, 0, 25);
   ellipse(bX, bFloor + 6, bW * 1.1, 12);
+
+  // ── Booth body ──
   fill(245, 245, 235);
   stroke(60, 60, 60);
   strokeWeight(1.5);
   rect(bL, bTop, bW, bH, 3, 3, 0, 0);
+
+  // ── Vertical panel lines ──
   stroke(200, 200, 190);
   strokeWeight(1);
   line(bL + bW * 0.33, bTop + 2, bL + bW * 0.33, bFloor);
   line(bL + bW * 0.66, bTop + 2, bL + bW * 0.66, bFloor);
-  let wW = bW - 24,
-    wH = 46,
-    wX = bL + 12,
-    wY = bTop + 14;
+
+  // ── Service window (upper portion) ──
+  let wW = bW - 24;
+  let wH = 46;
+  let wX = bL + 12;
+  let wY = bTop + 14;
+  // Frame
   fill(80, 60, 40);
   stroke(40, 30, 20);
   strokeWeight(1.5);
   rect(wX - 3, wY - 3, wW + 6, wH + 6, 3);
+  // Glass
   fill(190, 220, 245, 210);
   noStroke();
   rect(wX, wY, wW, wH, 2);
+  // Horizontal sliding divide
   stroke(140, 170, 200);
   strokeWeight(1);
   line(wX + 2, wY + wH * 0.48, wX + wW - 2, wY + wH * 0.48);
+  // Vertical divide
   line(wX + wW * 0.5, wY + 2, wX + wW * 0.5, wY + wH - 2);
+  // ── Attendant visible through window ──
   drawBoothAttendant(bX, wX, wY, wW, wH);
+  // Glass glint
   noStroke();
   fill(255, 255, 255, 70);
   rect(wX + 3, wY + 3, wW * 0.3, wH * 0.38, 2);
+
+  // ── Shelf / counter ledge under window ──
   fill(160, 130, 90);
   stroke(80, 60, 40);
   strokeWeight(1.2);
   rect(bL - 4, wY + wH + 3, bW + 8, 10, 2);
+  // Ledge edge highlight
   noStroke();
   fill(200, 170, 120, 120);
   rect(bL - 3, wY + wH + 3, bW + 6, 4, 1);
+
+  // ── Lower door ──
   fill(200, 195, 185);
   stroke(100, 95, 85);
   strokeWeight(1.2);
   rect(bL + bW * 0.25, wY + wH + 18, bW * 0.5, bH - (wH + 28), 2, 2, 0, 0);
+  // Door panel details
   stroke(150, 145, 135);
   strokeWeight(1);
   let dX = bL + bW * 0.25,
@@ -594,6 +654,7 @@ function drawTicketBooth(gateAngle) {
     dH2 = bH - (wH + 28);
   rect(dX + 5, dY + 5, dW - 10, dH2 * 0.45, 1);
   rect(dX + 5, dY + dH2 * 0.5, dW - 10, dH2 * 0.45, 1);
+  // Door handle
   stroke(120, 100, 70);
   strokeWeight(2);
   line(
@@ -602,8 +663,11 @@ function drawTicketBooth(gateAngle) {
     bL + bW * 0.44,
     wY + wH + 18 + dH2 * 0.53,
   );
+
+  // ── Striped roof ──
   let stripeColors = [color(220, 50, 50), color(245, 245, 235)];
   let stripeW = roofW / 7;
+  // Clip stripes to roof rect shape first
   drawingContext.save();
   drawingContext.beginPath();
   drawingContext.rect(roofL, bTop - roofH, roofW, roofH);
@@ -614,10 +678,13 @@ function drawTicketBooth(gateAngle) {
     rect(roofL + i * stripeW, bTop - roofH, stripeW + 1, roofH);
   }
   drawingContext.restore();
+  // Roof outline
   stroke(60, 60, 60);
   strokeWeight(1.5);
   noFill();
   rect(roofL, bTop - roofH, roofW, roofH, 2, 2, 0, 0);
+
+  // ── Small sign above window ──
   fill(220, 50, 50);
   stroke(140, 20, 20);
   strokeWeight(1);
@@ -627,29 +694,40 @@ function drawTicketBooth(gateAngle) {
   textAlign(CENTER, CENTER);
   textSize(7);
   text("PARKING", bX, bTop + 8);
-  let armBaseX = bR + 2,
-    armBaseY = bFloor - 38,
-    armLen = 110;
-  let pivotX = armBaseX + 9,
-    pivotY = armBaseY - 8;
+
+  // ── Barrier arm (animated gate) ──
+  let armBaseX = bR + 2;
+  let armBaseY = bFloor - 38;
+  let armLen = 110;
+  let pivotX = armBaseX + 9; // centre of pivot post
+  let pivotY = armBaseY - 8; // hinge point
+
+  // Pivot post
   fill(180, 180, 190);
   stroke(80, 80, 90);
   strokeWeight(1.2);
   rect(armBaseX, armBaseY - 12, 18, 52, 3);
+  // Post highlight
   noStroke();
   fill(255, 255, 255, 40);
   rect(armBaseX + 2, armBaseY - 10, 5, 48, 2);
+
+  // Counterweight (opposite side of pivot, moves opposite to arm)
   push();
   translate(pivotX, pivotY);
-  rotate(gateAngle + PI);
+  rotate(gateAngle + PI); // counterweight swings opposite
   fill(100, 100, 110);
   stroke(60, 60, 70);
   strokeWeight(1);
   rect(2, -5, 22, 10, 3);
   pop();
+
+  // Arm — rotates around pivot
   push();
   translate(pivotX, pivotY);
-  rotate(gateAngle);
+  rotate(gateAngle); // 0 = horizontal, -HALF_PI = vertical (raised)
+
+  // Clip stripes to arm shape
   drawingContext.save();
   drawingContext.beginPath();
   drawingContext.rect(0, -8, armLen, 10);
@@ -661,105 +739,129 @@ function drawTicketBooth(gateAngle) {
     rect(i * barStripeW, -8, barStripeW, 10);
   }
   drawingContext.restore();
+  // Arm outline
   stroke(80, 80, 90);
   strokeWeight(1);
   noFill();
   rect(0, -8, armLen, 10, 2);
+  // Tip reflector
   fill(255, 220, 0);
   noStroke();
   ellipse(armLen - 4, -3, 8, 8);
+
   pop();
+
   pop();
 }
 
 // ─────────────────────────────────────────────
-// Past customers bar
+// Past customers shape history bar at top
 // ─────────────────────────────────────────────
 function drawPastCustomers() {
+  // Only show after at least one submission
   if (submissions.length === 0) return;
-  let sz = 22, pad = 12, barY = 28;
+
+  let sz = 22; // shape size
+  let pad = 12; // gap between shapes
+  let barY = 28; // vertical centre of the bar
   let startX = width / 2 - (submissions.length * (sz + pad)) / 2;
 
-  let col1 = color(40,  120, 220);
-  let col2 = color(220,  60,  60);
-  let col3 = color(220, 130,  30);
-  let col4 = color(140,  50, 200);
-  let colN = color(180, 180, 180);
+  // Legend colours — match the storyboard colour coding
+  let col1 = color(40, 120, 220); // ritual 1 = blue (square)
+  let col2 = color(220, 60, 60); // ritual 2 = red (triangle)
+  let colN = color(180, 180, 180); // neutral / upcoming
 
   push();
-
-  // ── Legend (top-right) ──
-  let lx = width - 168, ly = 8;
-  noStroke();
-
-  // Square
-  fill(col1); rect(lx, ly,      10, 10, 2);
-  fill(60);   textAlign(LEFT, TOP); textSize(10); text("— ritual 1", lx + 14, ly);
-  // Triangle
-  fill(col2); triangle(lx+5, ly+16, lx, ly+26, lx+10, ly+26);
-  fill(60);   text("— ritual 2", lx + 14, ly + 16);
-  // Circle
-  fill(col3); ellipse(lx + 5, ly + 37, 10, 10);
-  fill(60);   text("— ritual 3", lx + 14, ly + 32);
-  // Diamond
-  fill(col4); quad(lx+5, ly+46, lx+10, ly+51, lx+5, ly+56, lx, ly+51);
-  fill(60);   text("— ritual 4", lx + 14, ly + 48);
-  // None
-  stroke(140); strokeWeight(1.5);
-  line(lx, ly + 68, lx + 10, ly + 68);
-  noStroke();
-  fill(60);   text("— anything", lx + 14, ly + 64);
-
-  // ── Past customer shapes ──
+  // Subtle label
   noStroke();
   fill(13, 67, 102, 160);
   textAlign(RIGHT, CENTER);
   textSize(11);
   text("past customers", startX - 10, barY);
 
+  // Legend key (top-right)
+  let lx = width - 160,
+    ly = 12;
+  textAlign(LEFT, TOP);
+  textSize(10);
+  fill(col1);
+  rect(lx, ly, 10, 10, 2);
+  fill(60);
+  text("— ritual 1", lx + 14, ly);
+  fill(col2);
+  rect(lx, ly + 16, 10, 10, 2);
+  fill(60);
+  text("— ritual 2", lx + 14, ly + 16);
+  stroke(140);
+  strokeWeight(1.5);
+  line(lx, ly + 38, lx + 10, ly + 38);
+  noStroke();
+  fill(60);
+  text("— anything", lx + 14, ly + 32);
+
+  // Draw one shape per completed submission
   for (let i = 0; i < submissions.length; i++) {
     let x = startX + i * (sz + pad) + sz / 2;
-    let shapeType = shapeArray[i % shapeArray.length];
-    let col =
-      shapeType === "square"   ? col1 :
-      shapeType === "triangle" ? col2 :
-      shapeType === "circle"   ? col3 :
-      shapeType === "diamond"  ? col4 : colN;
 
-    if (shapeType !== "none") {
-      // Shadow
-      noStroke();
-      fill(0, 0, 0, 30);
-      _drawPastShape(shapeType, x + 2, barY + 2, sz);
+    // Determine shape and colour for this submission
+    let shapeType, col;
+    if (i === 0) {
+      shapeType = "square";
+      col = col1;
+    } else if (i === 1) {
+      shapeType = "triangle";
+      col = col2;
+    } else {
+      shapeType = shapeArray[i - 2];
+      col =
+        shapeType === "square" ? col1 : shapeType === "triangle" ? col2 : colN;
     }
 
+    // Small drop shadow (skip for "none")
+    if (shapeType !== "none") {
+      noStroke();
+      fill(0, 0, 0, 30);
+      if (shapeType === "square") {
+        rect(x - sz / 2 + 2, barY - sz / 2 + 2, sz, sz, 3);
+      } else {
+        let h = sz * 0.866;
+        triangle(
+          x + 2,
+          barY - h / 2 + 2,
+          x - sz / 2 + 2,
+          barY + h / 2 + 2,
+          x + sz / 2 + 2,
+          barY + h / 2 + 2,
+        );
+      }
+    }
+
+    // Shape — dash for "none"
     fill(col);
     stroke(0);
     strokeWeight(1.2);
-    if (shapeType === "none") {
+    if (shapeType === "square") {
+      rect(x - sz / 2, barY - sz / 2, sz, sz, 3);
+    } else if (shapeType === "triangle") {
+      let h = sz * 0.866;
+      triangle(
+        x,
+        barY - h / 2,
+        x - sz / 2,
+        barY + h / 2,
+        x + sz / 2,
+        barY + h / 2,
+      );
+    } else {
+      // "none" — draw a neutral dash
       stroke(colN);
       strokeWeight(2.5);
       noFill();
       line(x - sz / 2, barY, x + sz / 2, barY);
-    } else {
-      _drawPastShape(shapeType, x, barY, sz);
     }
   }
-  pop();
-}
 
-function _drawPastShape(shapeType, x, y, sz) {
-  if (shapeType === "square") {
-    rect(x - sz / 2, y - sz / 2, sz, sz, 3);
-  } else if (shapeType === "triangle") {
-    let h = sz * 0.866;
-    triangle(x, y - h / 2, x - sz / 2, y + h / 2, x + sz / 2, y + h / 2);
-  } else if (shapeType === "circle") {
-    ellipse(x, y, sz, sz);
-  } else if (shapeType === "diamond") {
-    let hd = sz / 2;
-    quad(x, y - hd, x + hd, y, x, y + hd, x - hd, y);
-  }
+  pop();
 }
 
 function displayCurrentGuest(
@@ -769,16 +871,27 @@ function displayCurrentGuest(
   animalName,
   guestLabel,
 ) {
+  if (submissions.length >= 8) return;
   drawCar(carAnimX, carColor, shape, animalName, guestLabel);
 }
 
 // ─────────────────────────────────────────────
-// Fog overlay
+// Fog overlay — lower half, staged by wrongCount
+// Stage 0: no fog
+// Stage 1: light haze (wrongCount === 1)
+// Stage 2: moderate fog (wrongCount === 2)
+// Stage 3+: thick fog (wrongCount >= 3)
 // ─────────────────────────────────────────────
 function drawFog() {
   if (typeof wrongCount === "undefined" || wrongCount === 0) return;
-  let menuH = 200,
-    fogTop = height - menuH;
+
+  let menuH = 200;
+  let fogTop = height - menuH;
+
+  // How many cloud layers and their opacity scale with wrongCount
+  // Stage 1: wispy, still readable
+  // Stage 2: thick, hard to read
+  // Stage 3+: almost fully obscured
   let layers, baseAlpha;
   if (wrongCount === 1) {
     layers = 3;
@@ -793,10 +906,15 @@ function drawFog() {
 
   push();
   noStroke();
+
+  // ── Dense cloud base — flat fill behind the puffs ──
+  // Increases opacity with each stage
   let baseOpacity = wrongCount === 1 ? 80 : wrongCount === 2 ? 155 : 215;
   fill(218, 222, 230, baseOpacity);
   rect(0, fogTop, width, menuH);
 
+  // ── Cloud puff rows — multiple rows of overlapping ellipses ──
+  // Each stage adds more rows and pushes them further down into the panel
   let rowDefs;
   if (wrongCount === 1) {
     rowDefs = [
@@ -891,33 +1009,45 @@ function drawFog() {
   }
 
   for (let row of rowDefs) {
+    // Seed the randomness so clouds don't drift each frame
     randomSeed(row.y * 13 + wrongCount * 7);
     let spacing = width / row.count;
     for (let i = 0; i < row.count; i++) {
       let cx =
         i * spacing + spacing * 0.5 + random(-spacing * 0.25, spacing * 0.25);
-      let cw = random(row.wMin, row.wMax),
-        ch = random(row.hMin, row.hMax);
+      let cw = random(row.wMin, row.wMax);
+      let ch = random(row.hMin, row.hMax);
+      // Subtle slow drift using frameCount — very gentle horizontal sway
       let drift = sin(frameCount * 0.008 + i * 1.3 + row.y * 0.02) * 14;
+
+      // Shadow puff (slightly darker, offset down-right)
       fill(180, 185, 196, row.alpha * 0.35);
       ellipse(cx + drift + 6, row.y + 5, cw * 0.9, ch * 0.85);
+
+      // Main cloud puff
       fill(215, 220, 228, row.alpha);
       ellipse(cx + drift, row.y, cw, ch);
+
+      // Bright highlight on top-left of each puff
       fill(240, 243, 248, row.alpha * 0.55);
       ellipse(cx + drift - cw * 0.15, row.y - ch * 0.15, cw * 0.55, ch * 0.5);
     }
   }
+
+  // ── Extra heavy cap at stage 3 — nearly opaque bottom band ──
   if (wrongCount >= 3) {
     fill(205, 210, 220, 210);
     rect(0, fogTop + menuH * 0.45, width, menuH * 0.55);
   }
 
+  // ── Slow-rolling wisp ribbons at the cloud top edge ──
+  // These give the clouds a soft, billowing top border
   let wispCount = wrongCount >= 3 ? 3 : wrongCount === 2 ? 2 : 1;
   for (let w = 0; w < wispCount; w++) {
     let wispAlpha = wrongCount >= 3 ? 110 : wrongCount === 2 ? 75 : 45;
-    let wispY = fogTop - 8 + w * 12,
-      speed = 0.012 - w * 0.003,
-      amp = 16 - w * 3;
+    let wispY = fogTop - 8 + w * 12;
+    let speed = 0.012 - w * 0.003;
+    let amp = 16 - w * 3;
     fill(220, 224, 232, wispAlpha);
     beginShape();
     vertex(0, wispY + amp);
@@ -932,68 +1062,49 @@ function drawFog() {
     vertex(0, wispY + amp + 60);
     endShape(CLOSE);
   }
+
   pop();
 }
 
 function displayCompletion() {
-  let sh = typeof getCurrentShift === "function" ? getCurrentShift() : null;
-  if (!sh) return;
-  // Night completion is handled by the gameWon flag/drawGameWon() in sketch.js
-  if (sh.id === "night") return;
-
-  if (sh.id === "morning" && submissions.length >= 6) {
-    _drawCompletionCard(
-      "Morning Shift Complete!",
-      "Heading into the afternoon...",
-    );
-  } else if (sh.id === "afternoon" && submissions.length >= 14) {
-    _drawCompletionCard("Afternoon Shift Done!", "Night shift awaits...");
+  if (submissions.length >= 8) {
+    let sz = 400;
+    fill(255);
+    stroke(13, 67, 102);
+    strokeWeight(1);
+    rect(width / 2 - sz / 2, height / 2 - sz / 2, sz, sz);
+    fill(13, 67, 102);
+    noStroke();
+    textAlign(CENTER, CENTER);
+    textSize(48);
+    text("Shift Over", width / 2, height / 2);
   }
 }
-
-function _drawCompletionCard(title, sub) {
-  let sz = 420;
-  push();
-  fill(0, 0, 0, 120);
-  noStroke();
-  rect(0, 0, width, height);
-  fill(255);
-  stroke(13, 67, 102);
-  strokeWeight(1.5);
-  rect(width / 2 - sz / 2, height / 2 - sz / 2, sz, sz, 14);
-  fill(13, 67, 102);
-  noStroke();
-  rect(width / 2 - sz / 2, height / 2 - sz / 2, sz, 52, 14, 14, 0, 0);
-  fill(255);
-  textAlign(CENTER, CENTER);
-  textSize(26);
-  text(title, width / 2, height / 2 - sz / 2 + 26);
-  fill(60, 80, 120);
-  textSize(15);
-  text(sub, width / 2, height / 2 + 10);
-  fill(140, 140, 160);
-  textSize(12);
-  text("(Stage transition in progress...)", width / 2, height / 2 + 38);
-  pop();
-}
-
 function drawBoothAttendant(bX, wX, wY, wW, wH) {
+  // Clip the attendant to the window area so they sit neatly behind the glass
   drawingContext.save();
   drawingContext.beginPath();
   drawingContext.rect(wX + 2, wY + 2, wW - 4, wH - 4);
   drawingContext.clip();
-  let cx = wX + wW * 0.52,
-    headY = wY + wH * 0.38,
-    headR = wH * 0.22;
+
+  let cx = wX + wW * 0.52; // centre of attendant horizontally in window
+  let headY = wY + wH * 0.38;
+  let headR = wH * 0.22;
+
   push();
+
+  // ── Uniform body / torso ──
   fill(13, 67, 102);
   noStroke();
+  // Shoulders + torso (trapezoid shape)
   beginShape();
-  vertex(cx - headR * 1.6, wY + wH + 4);
-  vertex(cx + headR * 1.6, wY + wH + 4);
-  vertex(cx + headR * 1.1, headY + headR * 1.1);
-  vertex(cx - headR * 1.1, headY + headR * 1.1);
+  vertex(cx - headR * 1.6, wY + wH + 4); // bottom-left
+  vertex(cx + headR * 1.6, wY + wH + 4); // bottom-right
+  vertex(cx + headR * 1.1, headY + headR * 1.1); // shoulder-right
+  vertex(cx - headR * 1.1, headY + headR * 1.1); // shoulder-left
   endShape(CLOSE);
+
+  // Collar / shirt
   fill(245, 245, 235);
   noStroke();
   triangle(
@@ -1004,6 +1115,8 @@ function drawBoothAttendant(bX, wX, wY, wW, wH) {
     cx + headR * 0.5,
     headY + headR * 1.6,
   );
+
+  // Gold badge on chest
   fill(200, 165, 60);
   noStroke();
   rect(cx + headR * 0.2, headY + headR * 1.3, headR * 0.7, headR * 0.42, 2);
@@ -1012,27 +1125,40 @@ function drawBoothAttendant(bX, wX, wY, wW, wH) {
   textAlign(CENTER, CENTER);
   textSize(max(5, headR * 0.28));
   text("PP", cx + headR * 0.55, headY + headR * 1.52);
+
+  // ── Head ──
   fill(255, 218, 170);
   stroke(160, 110, 70);
   strokeWeight(1);
   ellipse(cx, headY, headR * 2, headR * 2.1);
+
+  // ── Cap ──
   fill(13, 67, 102);
   noStroke();
+  // Cap brim
   rect(cx - headR * 1.25, headY - headR * 0.72, headR * 2.5, headR * 0.28, 2);
+  // Cap dome
   arc(cx, headY - headR * 0.58, headR * 1.8, headR * 1.4, PI, TWO_PI);
+  // Gold cap band
   fill(200, 165, 60);
   rect(cx - headR * 0.9, headY - headR * 0.72, headR * 1.8, headR * 0.18);
+
+  // ── Eyes ──
   fill(40, 25, 10);
   noStroke();
   ellipse(cx - headR * 0.32, headY - headR * 0.08, headR * 0.22, headR * 0.22);
   ellipse(cx + headR * 0.32, headY - headR * 0.08, headR * 0.22, headR * 0.22);
+  // Eye glints
   fill(255);
   ellipse(cx - headR * 0.28, headY - headR * 0.12, headR * 0.09, headR * 0.09);
   ellipse(cx + headR * 0.36, headY - headR * 0.12, headR * 0.09, headR * 0.09);
+
+  // ── Smile ──
   noFill();
   stroke(140, 80, 50);
   strokeWeight(1.2);
   arc(cx, headY + headR * 0.14, headR * 0.55, headR * 0.38, 0, PI);
+
   pop();
   drawingContext.restore();
 }
