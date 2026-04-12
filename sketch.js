@@ -1121,7 +1121,8 @@ function mousePressed() {
     clickHistory = [];
     disabled = [false, false, false, false, false];
     tickGameClock();
-    carState = "raising";
+    gateOpen.play();
+    // carState = "raising";
   }
 }
 
