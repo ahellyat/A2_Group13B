@@ -392,7 +392,7 @@ function mousePressed() {
     // Reset history immediately so the menu is clean when the next car arrives
     clickHistory = [];
     disabled = [false, false, false, false, false];
-    tickGameClock();
+    // Trigger exit sequence — gate raises, then car drives off
     carState = "raising";
   }
 }
